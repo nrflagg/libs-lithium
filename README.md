@@ -1,5 +1,7 @@
 # LIBS Lithium Comparison
 
+**Open the tool: https://nrflagg.github.io/libs-lithium/**
+
 A single-page tool for LIBS `.tdms` spectra. Open `index.html` in a browser (or the GitHub Pages address for this repository) and drop files onto it. Everything runs in the browser; no data is uploaded.
 
 What it does:
