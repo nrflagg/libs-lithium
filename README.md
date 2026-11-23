@@ -17,3 +17,7 @@ Notes:
 - Results are relative intensities for comparing similar samples. They are not concentrations until calibration standards are added.
 - The detector ceiling defaults to 65,535 counts; change it under Analysis settings if your spectrometer differs.
 - Line wavelengths are air wavelengths in nm and are listed in the `LINES` table near the top of the script in `index.html`.
+
+## License
+
+MIT. See `LICENSE`.
