@@ -1,0 +1,1022 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LIBS Lithium Comparison</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+/* Layout idea: a plain lab notebook page. One column, Garamond, ink on paper;
+   colour is used only to tell samples apart and to mark status. */
+:root{
+  --paper:#fbfaf7; --panel:#ffffff; --ink:#151513; --ink2:#55534d; --ink3:#8a8780; --rule:#dcd9d0; --rule2:#eeece5;
+  --accent:#151513;
+  --good:#1d7a3a; --warn:#9a6400; --bad:#b3261e; --good-bg:#e7f3ea; --warn-bg:#fbf0d9; --bad-bg:#fbe6e3; --mute-bg:#eeece5;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100; --s5:#e87ba4; --s6:#008300; --s7:#6250d6; --s8:#e34948; --s9:#8a8780;
+  --serif:"EB Garamond", Garamond, "Adobe Garamond Pro", "Times New Roman", serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#161615; --panel:#1d1d1c; --ink:#f0efec; --ink2:#c3c2b7; --ink3:#8e8c84; --rule:#3a3936; --rule2:#2a2a28;
+    --accent:#f0efec;
+    --good:#5cc47e; --warn:#e0a83a; --bad:#f0827a; --good-bg:#1c3324; --warn-bg:#3a2e12; --bad-bg:#40201d; --mute-bg:#2a2a28;
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#0ca30c; --s7:#9085e9; --s8:#e66767; --s9:#8e8c84;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#161615; --panel:#1d1d1c; --ink:#f0efec; --ink2:#c3c2b7; --ink3:#8e8c84; --rule:#3a3936; --rule2:#2a2a28;
+  --accent:#f0efec;
+  --good:#5cc47e; --warn:#e0a83a; --bad:#f0827a; --good-bg:#1c3324; --warn-bg:#3a2e12; --bad-bg:#40201d; --mute-bg:#2a2a28;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#0ca30c; --s7:#9085e9; --s8:#e66767; --s9:#8e8c84;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--paper);color:var(--ink);font-family:var(--serif);font-size:18px;line-height:1.4;font-variant-numeric:lining-nums tabular-nums}
+main{max-width:1180px;margin:0 auto;padding:28px 20px 60px;display:flex;flex-direction:column;gap:30px}
+h1{font-size:34px;font-weight:500;margin:0;letter-spacing:-.01em;text-wrap:balance}
+h2{font-size:23px;font-weight:500;margin:0 0 4px;text-wrap:balance}
+h3{font-size:18px;font-weight:600;margin:0}
+p{margin:0;max-width:72ch}
+.sub{color:var(--ink2)}
+.small{font-size:15.5px;color:var(--ink2)}
+section{display:flex;flex-direction:column;gap:12px}
+.head{display:flex;flex-direction:column;gap:6px;border-bottom:1px solid var(--ink);padding-bottom:16px}
+button,select,input{font:inherit;color:inherit}
+button,.btn{background:var(--panel);border:1px solid var(--ink3);border-radius:3px;padding:5px 12px;cursor:pointer;font-size:16.5px;line-height:1.3}
+button:hover,.btn:hover{border-color:var(--ink);background:var(--rule2)}
+button.primary{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+button.primary:hover{opacity:.85;background:var(--ink)}
+button.mini{padding:1px 8px;font-size:15px}
+button:disabled{opacity:.45;cursor:default}
+:focus-visible{outline:2px solid var(--s1);outline-offset:2px}
+select,input[type=number],input[type=text]{background:var(--panel);border:1px solid var(--ink3);border-radius:3px;padding:3px 6px;font-size:16.5px}
+input[type=number]{width:6.2em}
+label{display:inline-flex;gap:6px;align-items:center;white-space:nowrap}
+.row{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center}
+#drop{border:1.5px dashed var(--ink3);border-radius:4px;padding:18px 20px;display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center;background:var(--panel)}
+#drop.over{border-color:var(--s1);background:var(--rule2)}
+#drop p{flex:1 1 260px}
+#msg{color:var(--bad);font-size:16px}
+#msg:empty{display:none}
+.tablewrap{overflow-x:auto;border:1px solid var(--rule);border-radius:4px;background:var(--panel)}
+table{border-collapse:collapse;width:100%;font-size:16px}
+th,td{padding:7px 10px;text-align:right;border-bottom:1px solid var(--rule2);vertical-align:middle;white-space:nowrap}
+th{font-weight:600;font-size:14.5px;color:var(--ink2);border-bottom:1px solid var(--rule);vertical-align:bottom;white-space:normal;line-height:1.2}
+th.l,td.l{text-align:left}
+tr:last-child td{border-bottom:none}
+tbody tr.sel{background:var(--rule2)}
+tbody tr.pick{cursor:pointer}
+th.grp{text-align:center;border-left:1px solid var(--rule);color:var(--ink);font-size:15px}
+td.gl,th.gl{border-left:1px solid var(--rule)}
+.chip{display:inline-block;width:11px;height:11px;border-radius:2px;margin-right:7px;vertical-align:baseline}
+.name{white-space:normal;overflow-wrap:anywhere}
+td.nm{min-width:250px;white-space:normal}
+th.mt{min-width:150px}
+.pm{color:var(--ink3)}
+.pill{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:1px 9px 1px 7px;font-size:14.5px;white-space:nowrap}
+.pill.good{background:var(--good-bg);color:var(--good)} .pill.warn{background:var(--warn-bg);color:var(--warn)}
+.pill.bad{background:var(--bad-bg);color:var(--bad)} .pill.mute{background:var(--mute-bg);color:var(--ink2)}
+.bar{position:relative;height:14px;width:150px;background:var(--rule2);border-radius:2px;display:inline-block;vertical-align:middle}
+.bar i{position:absolute;left:0;top:0;bottom:0;border-radius:2px 4px 4px 2px}
+.bar b{position:absolute;top:6px;height:2px;background:var(--ink)}
+.bar b::before,.bar b::after{content:"";position:absolute;top:-3px;width:1.5px;height:8px;background:var(--ink)}
+.bar b::before{left:0}.bar b::after{right:0}
+.plots{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media (max-width:820px){.plots{grid-template-columns:1fr}}
+.plot{border:1px solid var(--rule);border-radius:4px;background:var(--panel);padding:12px 12px 8px;display:flex;flex-direction:column;gap:6px;min-width:0;position:relative}
+.plot canvas{width:100%;height:290px;display:block;cursor:crosshair;touch-action:pan-y}
+.plot.wide canvas{height:340px}
+.legend{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:15px;color:var(--ink2)}
+.tip{position:absolute;pointer-events:none;background:var(--panel);border:1px solid var(--ink3);border-radius:3px;padding:5px 8px;font-size:14.5px;line-height:1.3;box-shadow:0 2px 8px rgba(0,0,0,.15);display:none;z-index:5;max-width:340px}
+.tip div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+details{border:1px solid var(--rule);border-radius:4px;background:var(--panel);padding:8px 14px}
+details[open]{padding-bottom:14px}
+summary{cursor:pointer;font-weight:600}
+details>*+*{margin-top:10px}
+.note{border-left:3px solid var(--ink3);padding:2px 0 2px 12px;color:var(--ink2);font-size:16.5px}
+.kv{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:2px 24px;font-size:15.5px}
+.kv div{display:flex;justify-content:space-between;gap:10px;border-bottom:1px solid var(--rule2)}
+.kv span:first-child{color:var(--ink2)}
+.eg{font-size:14px;border:1px solid var(--ink3);border-radius:3px;padding:0 5px;margin-left:8px;color:var(--ink2)}
+.ptwrap{overflow-x:auto}
+#ptable{display:grid;grid-template-columns:repeat(18,minmax(30px,1fr));gap:3px;min-width:600px;max-width:820px}
+#ptable>*{font:inherit;font-size:14.5px;text-align:center;padding:3px 0;border-radius:3px;border:1px solid transparent;line-height:1.3;color:var(--ink3);background:transparent}
+#ptable .k-s,.chip.k-s{background:var(--good-bg);color:var(--good)} #ptable .k-w,.chip.k-w{background:var(--mute-bg);color:var(--ink)}
+#ptable .k-x,.chip.k-x{background:var(--warn-bg);color:var(--warn)} .chip.k-n{border:1px solid var(--rule)}
+#ptable button{cursor:pointer;font-weight:600;border-color:var(--ink3)}
+#ptable button:hover{border-color:var(--ink)}
+#ptable button[aria-pressed="true"],.chip.k-on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+#ptable .li{background:var(--ink);color:var(--paper);font-weight:600}
+td .nd{color:var(--ink3)} td .fl{color:var(--warn);font-weight:600}
+.hide{display:none!important}
+</style>
+</head>
+<body>
+<main>
+  <div class="head">
+    <h1>LIBS Lithium Comparison</h1>
+    <p class="sub">Converts LIBS <code>.tdms</code> files to CSV in your browser, then measures the lithium lines in each sample, checks them for calcium overlap and detector saturation, and ranks the samples against one another. Files are read locally and never leave this page.</p>
+  </div>
+
+  <section>
+    <div id="drop">
+      <p><strong>Drop .tdms files here</strong>, or choose them. Each file becomes one sample; every numeric channel in it (one per grid location) is treated as a replicate.</p>
+      <input type="file" id="file" accept=".tdms" multiple class="hide">
+      <button class="primary" id="pick">Add .tdms files</button>
+      <button id="zipBtn">Download all CSVs (.zip)</button>
+      <button id="sumBtn">Download comparison table (.csv)</button>
+    </div>
+    <div id="msg" role="status"></div>
+  </section>
+
+  <section>
+    <h2>How much lithium is in each sample, relative to the others?</h2>
+    <div class="row">
+      <label>Measure <select id="mMeasure"><option value="net">Li I 670.78 peak height</option><option value="area">Li I 670.78 peak area</option></select></label>
+      <label>divided by <select id="mNorm"></select></label>
+      <label>Relative to <select id="mRel"></select></label>
+      <label>Calibration <select id="cal"></select></label>
+      <button class="mini" id="calDel">Remove calibration</button>
+    </div>
+    <div id="calForm" class="row hide">
+      <label>Name <input type="text" id="calName" size="18" placeholder="e.g. brine standards Nov 2026"></label>
+      <label>Slope <input type="number" id="calSlope" step="any"></label>
+      <label>Intercept <input type="number" id="calInt" step="any" value="0"></label>
+      <label>Unit <input type="text" id="calUnit" size="6" value="ppm"></label>
+      <button class="mini" id="calSave">Save</button><button class="mini" id="calCancel">Cancel</button>
+      <span class="small">Concentration = (measured value − intercept) ÷ slope, for the measure selected above. Saved in this browser only.</span>
+    </div>
+    <div class="tablewrap"><table id="sumTable"></table></div>
+    <p class="small" id="sumNote"></p>
+  </section>
+
+  <section>
+    <h2>What else is in these samples, next to the lithium?</h2>
+    <p class="small">Pick the elements to track. Shading shows how well LIBS measures each one; only elements with a line set up here can be picked. These are relative intensities for comparing similar samples, not concentrations.</p>
+    <div class="row">
+      <span class="small">Presets</span>
+      <button class="mini" data-pre="Na,K,Rb,Cs,Mg,Ca,Sr,B">lithium clays</button>
+      <button class="mini" data-pre="Na,K,Rb,Si,Al,Fe,Ti,Mg,Ca,Sr,Ba">volcanic glass</button>
+      <button class="mini" data-pre="Fe,Cu,Zn,Mn,Pb,Ba,Ca,Si,Mg">black smoker sulfides</button>
+      <button class="mini" data-pre="">clear</button>
+      <label>Show <select id="cMode"><option value="height">peak height (counts)</option><option value="ratio">height ÷ Li I 670.78</option><option value="rel">% of the highest sample</option></select></label>
+    </div>
+    <div class="ptwrap"><div id="ptable" role="group" aria-label="Elements to track"></div></div>
+    <div class="legend"><span><span class="chip k-s"></span>strong</span><span><span class="chip k-w"></span>workable with care</span><span><span class="chip k-x"></span>weak or unreliable</span><span><span class="chip k-n"></span>not practical</span><span><span class="chip k-on"></span>tracked</span></div>
+    <div class="tablewrap"><table id="compTable"></table></div>
+    <p class="small" id="compNote"></p>
+    <div class="row">
+      <label>Plot Li I 670.78 against <select id="scEl"></select></label>
+      <label><input type="checkbox" id="scLocs" checked> show each grid location</label>
+    </div>
+    <div class="plot wide"><h3 id="scHead">Lithium against another element</h3><canvas id="pSc" style="cursor:default"></canvas><div class="tip"></div></div>
+    <p class="small">Large markers are sample means with ± one standard deviation across grid locations; small dots are individual locations. Both axes are peak heights above baseline, in counts.</p>
+  </section>
+
+  <section>
+    <h2>Are the lithium peaks clean?</h2>
+    <p class="small">Mean spectrum of each sample. Dashed lines mark expected line positions after the wavelength correction. Drag across a plot to zoom; double-click to reset.</p>
+    <div class="plots">
+      <div class="plot"><h3>Li I 670.78 nm and its calcium neighbour</h3><canvas id="p670"></canvas><div class="tip"></div></div>
+      <div class="plot"><h3>The 610 nm feature and the Ca I triplet</h3><canvas id="p610"></canvas><div class="tip"></div></div>
+    </div>
+    <div class="legend" id="legend"></div>
+    <div id="verdicts" style="display:flex;flex-direction:column;gap:8px"></div>
+  </section>
+
+  <section>
+    <h2>Full spectrum</h2>
+    <div class="row">
+      <label>Sample <select id="selSample"></select></label>
+      <label><input type="checkbox" id="showLocs"> show each grid location of this sample</label>
+      <label><input type="checkbox" id="logY"> log scale</label>
+      <span class="row" style="gap:6px"><span class="small">Go to</span>
+        <button class="mini" data-z="186,1052">all</button><button class="mini" data-z="668.8,672.8">Li 670.8</button><button class="mini" data-z="609,617.5">610 triplet</button><button class="mini" data-z="810,815">Li 812.6</button><button class="mini" data-z="458.5,462">Li 460.3</button><button class="mini" data-z="391,398.5">Ca II H&amp;K</button>
+      </span>
+    </div>
+    <div class="plot wide"><canvas id="pFull"></canvas><div class="tip"></div></div>
+  </section>
+
+  <section>
+    <h2 id="lineHead">Lines measured</h2>
+    <div class="tablewrap"><table id="lineTable"></table></div>
+    <details id="acq"><summary>Acquisition settings stored in the file</summary><div class="kv" id="acqBody"></div></details>
+  </section>
+
+  <section>
+    <details id="settings">
+      <summary>Analysis settings</summary>
+      <div class="row">
+        <label>Detector ceiling (counts) <input type="number" id="oCeil" value="65535" step="1"></label>
+        <label>Warn above <input type="number" id="oWarn" value="80" min="10" max="100" step="5"> % of ceiling</label>
+        <label>Peak window ± <input type="number" id="oHw" value="0.15" step="0.01" min="0.05" max="1"> nm</label>
+        <label>Detection limit, signal/noise ≥ <input type="number" id="oSnr" value="3" step="0.5" min="1"></label>
+      </div>
+      <div class="row">
+        <label>Ca I 610.27 ÷ 612.22 ratio <input type="number" id="oCa" value="0.334" step="0.001" min="0" max="2"></label>
+        <label><input type="checkbox" id="oAuto" checked> estimate wavelength shift from strong Ca, Na, K, Mg lines</label>
+        <label>Manual shift <input type="number" id="oShift" value="0" step="0.005"> nm</label>
+      </div>
+      <p class="small">The ceiling defaults to 16-bit (65,535 counts), which is an assumption about your spectrometer. Change it if your detector clips elsewhere. Spectra in these files are already averaged over the laser shots at each location, so a single saturated shot can hide below the ceiling: the check also flags peaks with flat tops (four or more pixels within 1% of the maximum).</p>
+      <p class="small">Each line is measured as the highest pixel within the window, minus a baseline taken as the median of pixels 0.35 to 1.2 nm either side (pixels near other listed lines are left out). Noise is the robust scatter of those same baseline pixels. The Ca ratio is the theoretical value for these two lines, which share an upper level; once you have a lithium-free calcium standard, replace it with the ratio you measure.</p>
+    </details>
+  </section>
+</main>
+
+<script>
+/* ---------- TDMS reader + LIBS line analysis (no dependencies) ---------- */
+const LIBS = (() => {
+  'use strict';
+
+  /* ===== TDMS parsing ===== */
+  const T_SIZE = {1:1,2:2,3:4,4:8,5:1,6:2,7:4,8:8,9:4,10:8,0x19:4,0x1A:8,0x21:1,0x44:16};
+  const utf8 = new TextDecoder('utf-8');
+
+  function readTdms(buf) {
+    const dv = new DataView(buf), u8 = new Uint8Array(buf), N = buf.byteLength;
+    if (N < 28 || utf8.decode(u8.subarray(0, 4)) !== 'TDSm')
+      throw new Error('Not a TDMS file (missing TDSm header).');
+    const objects = new Map();   // path -> {path, props, chunks:[], dtype}
+    const order = [];
+    let active = [];             // objects with raw data in the current segment
+    let pos = 0;
+    while (pos + 28 <= N) {
+      if (utf8.decode(u8.subarray(pos, pos + 4)) !== 'TDSm') break;
+      const toc = dv.getUint32(pos + 4, true);
+      const big = !!(toc & 64), le = !big;
+      if (toc & 128) throw new Error('DAQmx raw data is not supported.');
+      let next = Number(dv.getBigUint64(pos + 12, le));
+      const rawOff = Number(dv.getBigUint64(pos + 20, le));
+      const dataStart = pos + 28 + rawOff;
+      let segEnd = pos + 28 + next;
+      if (!Number.isFinite(next) || segEnd > N || next > 2 ** 52) segEnd = N;
+      let p = pos + 28;
+      const str = () => { const n = dv.getUint32(p, le); p += 4; const s = utf8.decode(u8.subarray(p, p + n)); p += n; return s; };
+      const val = (t) => {
+        let v;
+        switch (t) {
+          case 1: v = dv.getInt8(p); break; case 2: v = dv.getInt16(p, le); break;
+          case 3: v = dv.getInt32(p, le); break; case 4: v = Number(dv.getBigInt64(p, le)); break;
+          case 5: v = dv.getUint8(p); break; case 6: v = dv.getUint16(p, le); break;
+          case 7: v = dv.getUint32(p, le); break; case 8: v = Number(dv.getBigUint64(p, le)); break;
+          case 9: case 0x19: v = dv.getFloat32(p, le); break;
+          case 10: case 0x1A: v = dv.getFloat64(p, le); break;
+          case 0x20: return str();
+          case 0x21: v = dv.getUint8(p) !== 0; break;
+          case 0x44: {
+            const frac = Number(dv.getBigUint64(p + (le ? 0 : 8), le)), sec = Number(dv.getBigInt64(p + (le ? 8 : 0), le));
+            v = new Date((sec - 2082844800 + frac / 2 ** 64) * 1000).toISOString(); break;
+          }
+          default: throw new Error('Unsupported TDMS property type 0x' + t.toString(16));
+        }
+        p += T_SIZE[t]; return v;
+      };
+      if (toc & 2) {
+        if (toc & 4) active = [];
+        const nObj = dv.getUint32(p, le); p += 4;
+        for (let i = 0; i < nObj; i++) {
+          const path = str();
+          let o = objects.get(path);
+          if (!o) { o = { path, props: {}, chunks: [], dtype: null, idx: null }; objects.set(path, o); order.push(o); }
+          const rawIdx = dv.getUint32(p, le); p += 4;
+          if (rawIdx === 0xFFFFFFFF) {
+            active = active.filter(a => a !== o);
+          } else {
+            if (rawIdx !== 0) {
+              const dtype = dv.getUint32(p, le); p += 8;           // dtype + dimension
+              const n = Number(dv.getBigUint64(p, le)); p += 8;
+              let bytes = null;
+              if (dtype === 0x20) { bytes = Number(dv.getBigUint64(p, le)); p += 8; }
+              else if (!T_SIZE[dtype]) throw new Error('Unsupported TDMS data type 0x' + dtype.toString(16));
+              o.dtype = dtype; o.idx = { n, bytes };
+            }
+            if (!active.includes(o)) active.push(o);
+          }
+          const nProp = dv.getUint32(p, le); p += 4;
+          for (let k = 0; k < nProp; k++) { const name = str(); const t = dv.getUint32(p, le); p += 4; o.props[name] = val(t); }
+        }
+      }
+      if ((toc & 8) && active.length) {
+        const chunk = active.reduce((s, o) => s + (o.dtype === 0x20 ? o.idx.bytes : o.idx.n * T_SIZE[o.dtype]), 0);
+        const nChunks = chunk > 0 ? Math.floor((segEnd - dataStart) / chunk) : 0;
+        let q = dataStart;
+        const inter = !!(toc & 32);
+        for (let c = 0; c < nChunks; c++) {
+          if (inter) {
+            const n = active[0].idx.n;
+            const outs = active.map(() => new Array(n));
+            for (let r = 0; r < n; r++) active.forEach((o, j) => { outs[j][r] = num(dv, q, o.dtype, le); q += T_SIZE[o.dtype]; });
+            active.forEach((o, j) => o.chunks.push(outs[j]));
+          } else {
+            for (const o of active) {
+              const n = o.idx.n;
+              if (o.dtype === 0x20) {
+                const out = new Array(n); let s0 = q + 4 * n, prev = 0;
+                for (let r = 0; r < n; r++) { const e = dv.getUint32(q + 4 * r, le); out[r] = utf8.decode(u8.subarray(s0 + prev, s0 + e)); prev = e; }
+                o.chunks.push(out); q += o.idx.bytes;
+              } else {
+                const out = new Array(n), sz = T_SIZE[o.dtype];
+                for (let r = 0; r < n; r++) out[r] = num(dv, q + r * sz, o.dtype, le);
+                o.chunks.push(out); q += n * sz;
+              }
+            }
+          }
+        }
+      }
+      if (segEnd <= pos) break;
+      pos = segEnd;
+    }
+    const channels = [];
+    let fileProps = {};
+    for (const o of order) {
+      const parts = [...o.path.matchAll(/'((?:[^']|'')*)'/g)].map(m => m[1].replace(/''/g, "'"));
+      if (o.path === '/') fileProps = o.props;
+      if (parts.length === 2 && o.dtype !== null)
+        channels.push({ path: o.path, group: parts[0], name: parts[1], isString: o.dtype === 0x20, isFloat32: o.dtype === 9 || o.dtype === 0x19, data: [].concat(...o.chunks), props: o.props });
+    }
+    if (!channels.length) throw new Error('The file contains no data channels.');
+    return { props: fileProps, channels };
+  }
+  function num(dv, p, t, le) {
+    switch (t) {
+      case 1: return dv.getInt8(p); case 2: return dv.getInt16(p, le); case 3: return dv.getInt32(p, le);
+      case 4: return Number(dv.getBigInt64(p, le)); case 5: return dv.getUint8(p); case 6: return dv.getUint16(p, le);
+      case 7: return dv.getUint32(p, le); case 8: return Number(dv.getBigUint64(p, le));
+      case 9: case 0x19: return dv.getFloat32(p, le); case 10: case 0x1A: return dv.getFloat64(p, le);
+      case 0x21: return dv.getUint8(p);
+      case 0x44: return Number(dv.getBigInt64(p + (le ? 8 : 0), le)) - 2082844800;
+    }
+    return NaN;
+  }
+
+  /* ===== CSV ===== */
+  const cell = (v) => { const s = String(v ?? ''); return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const f32 = (v) => String(Number(v.toPrecision(8)));
+  function toCsvRows(rows) { return rows.map(r => r.map(cell).join(',')).join('\n') + '\n'; }
+
+  // Same layout as nptdms `as_dataframe().to_csv(index=False)`: one column per channel.
+  function tdmsToCsv(tdms) {
+    const ch = tdms.channels, n = Math.max(...ch.map(c => c.data.length));
+    const rows = [ch.map(c => c.path)];
+    for (let r = 0; r < n; r++)
+      rows.push(ch.map(c => { const v = c.data[r]; return v === undefined ? '' : (typeof v === 'number' ? (c.isFloat32 ? f32(v) : String(v)) : v); }));
+    return toCsvRows(rows);
+  }
+
+  /* ===== Spectrum extraction ===== */
+  function toSpectra(tdms, fileName) {
+    const label = tdms.channels.find(c => c.isString);
+    const dataCh = tdms.channels.filter(c => !c.isString);
+    if (!label || !dataCh.length) throw new Error('Expected one text channel (header and wavelength) and at least one numeric channel.');
+    const L = label.data; let start = -1;
+    for (let i = 0; i < L.length; i++) if (L[i] !== '' && isFinite(+L[i]) && isFinite(+L[Math.min(i + 5, L.length - 1)])) { start = i; break; }
+    if (start < 0) throw new Error('No wavelength axis found in the text channel.');
+    const wl = Float64Array.from(L.slice(start), Number);
+    const settings = [];
+    for (let i = 0; i < start; i++) {
+      const vals = dataCh.map(c => c.data[i]);
+      settings.push({ name: L[i].replace(/^'/, ''), value: vals[0], varies: vals.some(v => v !== vals[0]), values: vals });
+    }
+    const locs = dataCh.map(c => ({ name: c.name, y: Float64Array.from(c.data.slice(start, start + wl.length)) }));
+    const mean = new Float64Array(wl.length);
+    for (const l of locs) for (let i = 0; i < wl.length; i++) mean[i] += l.y[i] / locs.length;
+    return { name: (tdms.props.name || fileName || 'sample').replace(/\.tdms$/i, ''), fileName, wl, locs, mean, settings };
+  }
+
+  /* ===== Lines (air wavelengths, nm) ===== */
+  const LINES = [
+    { id: 'Li670', el: 'Li', label: 'Li I 670.78', wl: 670.784, role: 'li' },
+    { id: 'Li610', el: 'Li', label: 'Li I 610.36', wl: 610.360, role: 'li' },
+    { id: 'Li812', el: 'Li', label: 'Li I 812.64', wl: 812.640, role: 'li' },
+    { id: 'Li460', el: 'Li', label: 'Li I 460.29', wl: 460.290, role: 'li' },
+    { id: 'Ca610', el: 'Ca', label: 'Ca I 610.27', wl: 610.272, role: 'ca' },
+    { id: 'Ca612', el: 'Ca', label: 'Ca I 612.22', wl: 612.222, role: 'ca' },
+    { id: 'Ca616', el: 'Ca', label: 'Ca I 616.22', wl: 616.217, role: 'ca', ref: true },
+    { id: 'Ca671', el: 'Ca', label: 'Ca I 671.77', wl: 671.769, role: 'ca' },
+    { id: 'Ca643', el: 'Ca', label: 'Ca I 643.91', wl: 643.907, role: 'ca', ref: true },
+    { id: 'Ca646', el: 'Ca', label: 'Ca I 646.26', wl: 646.257, role: 'ca', ref: true, pref: 1 },
+    { id: 'Ca422', el: 'Ca', label: 'Ca I 422.67', wl: 422.673, role: 'ca', ref: true },
+    { id: 'Ca393', el: 'Ca', label: 'Ca II 393.37', wl: 393.366, role: 'ca', ref: true, pref: 2 },
+    { id: 'Ca396', el: 'Ca', label: 'Ca II 396.85', wl: 396.847, role: 'ca', ref: true },
+    { id: 'Sr460', el: 'Sr', label: 'Sr I 460.73', wl: 460.733, role: 'other', pref: 1 },
+    { id: 'Sr407', el: 'Sr', label: 'Sr II 407.77', wl: 407.771, role: 'other', pref: 2 },
+    { id: 'Na819', el: 'Na', label: 'Na I 819.48', wl: 819.482, role: 'other', pref: 1 },
+    { id: 'Na589', el: 'Na', label: 'Na I 589.00', wl: 588.995, role: 'other', ref: true, pref: 2 },
+    { id: 'K769', el: 'K', label: 'K I 769.90', wl: 769.896, role: 'other', ref: true, pref: 1 },
+    { id: 'K766', el: 'K', label: 'K I 766.49', wl: 766.490, role: 'other', ref: true, pref: 2 },
+    { id: 'Rb780', el: 'Rb', label: 'Rb I 780.03', wl: 780.027, role: 'other', pref: 2 },
+    { id: 'Cs894', el: 'Cs', label: 'Cs I 894.35', wl: 894.347, role: 'other', pref: 2 },
+    { id: 'Mg518', el: 'Mg', label: 'Mg I 518.36', wl: 518.360, role: 'other', pref: 1 },
+    { id: 'Mg285', el: 'Mg', label: 'Mg I 285.21', wl: 285.213, role: 'other', pref: 2 },
+    { id: 'Mg279', el: 'Mg', label: 'Mg II 279.55', wl: 279.553, role: 'other', ref: true },
+    { id: 'Ba553', el: 'Ba', label: 'Ba I 553.55', wl: 553.548, role: 'other', pref: 1 },
+    { id: 'Ba455', el: 'Ba', label: 'Ba II 455.40', wl: 455.403, role: 'other', pref: 2 },
+    { id: 'B249', el: 'B', label: 'B I 249.77', wl: 249.773, role: 'other', pref: 2 },
+    { id: 'Si288', el: 'Si', label: 'Si I 288.16', wl: 288.158, role: 'other', pref: 2 },
+    { id: 'Al309', el: 'Al', label: 'Al I 309.27', wl: 309.271, role: 'other', pref: 1 },
+    { id: 'Al396', el: 'Al', label: 'Al I 396.15', wl: 396.152, role: 'other', pref: 2 },
+    { id: 'Ti499', el: 'Ti', label: 'Ti I 499.11', wl: 499.107, role: 'other', pref: 1 },
+    { id: 'Ti334', el: 'Ti', label: 'Ti II 334.94', wl: 334.941, role: 'other', pref: 2 },
+    { id: 'Fe438', el: 'Fe', label: 'Fe I 438.35', wl: 438.354, role: 'other', pref: 1 },
+    { id: 'Fe259', el: 'Fe', label: 'Fe II 259.94', wl: 259.940, role: 'other', pref: 2 },
+    { id: 'Mn403', el: 'Mn', label: 'Mn I 403.08', wl: 403.076, role: 'other', pref: 1 },
+    { id: 'Mn257', el: 'Mn', label: 'Mn II 257.61', wl: 257.610, role: 'other', pref: 2 },
+    { id: 'Cu510', el: 'Cu', label: 'Cu I 510.55', wl: 510.554, role: 'other', pref: 1 },
+    { id: 'Cu324', el: 'Cu', label: 'Cu I 324.75', wl: 324.754, role: 'other', pref: 2 },
+    { id: 'Zn481', el: 'Zn', label: 'Zn I 481.05', wl: 481.053, role: 'other', pref: 1 },
+    { id: 'Zn213', el: 'Zn', label: 'Zn I 213.86', wl: 213.857, role: 'other', pref: 2 },
+    { id: 'Pb368', el: 'Pb', label: 'Pb I 368.35', wl: 368.346, role: 'other', pref: 1 },
+    { id: 'Pb405', el: 'Pb', label: 'Pb I 405.78', wl: 405.781, role: 'other', pref: 2 },
+    { id: 'H656', el: 'H', label: 'H I 656.28', wl: 656.279, role: 'other', pref: 2 },
+    { id: 'Ar811', el: 'Ar', label: 'Ar I 811.53', wl: 811.531, role: 'other' },
+    { id: 'Ar794', el: 'Ar', label: 'Ar I 794.82', wl: 794.818, role: 'other' },
+    { id: 'Ar852', el: 'Ar', label: 'Ar I 852.14', wl: 852.144, role: 'other' },
+  ];
+  // Ca I 610.27 / 612.22 / 616.22 share one upper level (4s5s 3S1): their emitted
+  // intensity ratio is fixed by transition probabilities (about 1 : 3 : 5), independent of plasma temperature.
+  const CA_610_OVER_612 = 0.334, CA_612_OVER_616 = 0.602;
+
+  const median = (a) => { const s = Float64Array.from(a).sort(); const n = s.length; return n ? (n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2) : NaN; };
+  function lowerBound(wl, x) { let lo = 0, hi = wl.length; while (lo < hi) { const m = (lo + hi) >> 1; if (wl[m] < x) lo = m + 1; else hi = m; } return lo; }
+
+  /* Measure one line in one spectrum.
+     peak    = highest pixel within +/- hw of the expected position
+     base    = median of the flanking pixels (0.4 to 1.2 nm either side)
+     noise   = robust SD (1.4826 x MAD) of the same flanking pixels
+     net     = peak - base ;  area = sum(net) x pixel width over +/- hw */
+  function measure(wl, y, center, opt) {
+    const hw = opt.hw, i0 = lowerBound(wl, center - hw), i1 = lowerBound(wl, center + hw);
+    if (i1 <= i0 || i0 < 2 || i1 > wl.length - 2) return null;
+    let im = i0; for (let i = i0; i < i1; i++) if (y[i] > y[im]) im = i;
+    const fl = [], ex = opt.exclude || [];
+    const a0 = lowerBound(wl, center - 1.2), b1 = lowerBound(wl, center + 1.2);
+    for (let i = a0; i < b1; i++) {
+      if (Math.abs(wl[i] - center) < 0.35) continue;
+      let near = false; for (const e of ex) if (Math.abs(wl[i] - e) < 0.4 && Math.abs(e - center) > 0.3) { near = true; break; }
+      if (!near) fl.push(y[i]);
+    }
+    if (fl.length < 4) return null;
+    const base = median(fl), noise = 1.4826 * median(fl.map(v => Math.abs(v - base))) || 1e-9;
+    const net = y[im] - base;
+    let area = 0; for (let i = i0; i < i1; i++) area += (y[i] - base) * (wl[Math.min(i + 1, wl.length - 1)] - wl[i]);
+    // sub-pixel centre from a parabola through the top three pixels
+    let cen = wl[im];
+    if (im > 0 && im < wl.length - 1) {
+      const d = y[im - 1] - 2 * y[im] + y[im + 1];
+      if (d < 0) cen = wl[im] + 0.5 * (y[im - 1] - y[im + 1]) / d * (wl[im + 1] - wl[im - 1]) / 2;
+    }
+    const isMax = y[im] >= y[im - 1] && y[im] >= y[im + 1];
+    let flat = 1; for (let i = im + 1; i < wl.length && y[i] >= 0.99 * y[im]; i++) flat++; for (let i = im - 1; i >= 0 && y[i] >= 0.99 * y[im]; i--) flat++;
+    return { raw: y[im], base, net, noise, snr: net / noise, area, cen, isMax, flat, im };
+  }
+
+  function estimateShift(S, opt) {
+    const d = [];
+    for (const L of LINES) if (L.ref) {
+      const m = measure(S.wl, S.mean, L.wl, { hw: 0.3 });
+      if (m && m.isMax && m.snr > 20 && m.flat < 3) d.push(m.cen - L.wl);
+    }
+    return { shift: d.length >= 3 ? median(d) : 0, n: d.length };
+  }
+
+  function analyse(S, opt) {
+    opt = Object.assign({ hw: 0.15, ceiling: 65535, warnFrac: 0.8, caRatio: CA_610_OVER_612, snrMin: 3, autoShift: true, manualShift: 0 }, opt);
+    const est = estimateShift(S, opt);
+    const shift = opt.autoShift ? est.shift : opt.manualShift;
+    const lines = {};
+    opt.exclude = LINES.map(L => L.wl + shift);
+    for (const L of LINES) {
+      const c = L.wl + shift;
+      const m = measure(S.wl, S.mean, c, opt);
+      if (!m) { lines[L.id] = null; continue; }
+      const per = S.locs.map(l => measure(S.wl, l.y, c, opt));
+      const nets = per.map(p => p.net), mu = nets.reduce((a, b) => a + b, 0) / nets.length;
+      const sd = nets.length > 1 ? Math.sqrt(nets.reduce((a, b) => a + (b - mu) ** 2, 0) / (nets.length - 1)) : 0;
+      const rawMax = Math.max(...per.map(p => p.raw)), flatMax = Math.max(...per.map(p => p.flat));
+      lines[L.id] = Object.assign(m, { line: L, center: c, per, locMean: mu, locSd: sd, rawMax, flatMax,
+        detected: m.snr >= opt.snrMin && m.isMax && Math.abs(m.cen - c) <= opt.hw,
+        sat: rawMax >= opt.ceiling * 0.98 || (flatMax >= 4 && m.snr > 10) ? 'saturated' : rawMax >= opt.ceiling * opt.warnFrac ? 'near' : 'ok' });
+    }
+    // whole-spectrum saturation scan
+    let gmax = 0, gwl = 0, nSat = 0, nNear = 0;
+    for (const l of S.locs) for (let i = 0; i < S.wl.length; i++) {
+      const v = l.y[i]; if (v > gmax) { gmax = v; gwl = S.wl[i]; }
+      if (v >= opt.ceiling * 0.98) nSat++; else if (v >= opt.ceiling * opt.warnFrac) nNear++;
+    }
+    let total = 0; for (let i = 0; i < S.wl.length; i++) total += S.mean[i];
+    const locTotals = S.locs.map(l => { let t = 0; for (let i = 0; i < l.y.length; i++) t += l.y[i]; return t; });
+    // The feature at 610.3: Ca I 610.27 and Li I 610.36 are ~1.4 pixels apart and cannot be resolved,
+    // so measure one peak covering both and predict the Ca share from Ca I 612.22.
+    const cMid = (610.272 + 610.360) / 2 + shift;
+    const bo = { hw: opt.hw + 0.05, exclude: opt.exclude };
+    const blend = measure(S.wl, S.mean, cMid, bo);
+    const ca612 = lines.Ca612, li670 = lines.Li670;
+    let b = null;
+    if (blend && ca612) {
+      const caPred = Math.max(0, ca612.net) * opt.caRatio;
+      const per = S.locs.map(l => {
+        const mb = measure(S.wl, l.y, cMid, bo), mc = measure(S.wl, l.y, 612.222 + shift, opt);
+        return mb.net - Math.max(0, mc.net) * opt.caRatio;
+      });
+      const mu = per.reduce((a, c) => a + c, 0) / per.length;
+      const sd = per.length > 1 ? Math.sqrt(per.reduce((a, c) => a + (c - mu) ** 2, 0) / (per.length - 1)) : 0;
+      const excess = blend.net - caPred;
+      const caShare = blend.net > 0 ? Math.min(1, caPred / blend.net) : NaN;
+      const cenOff = blend.cen - shift;           // peak centre on the corrected wavelength scale
+      const li670ok = li670 && li670.detected;
+      let verdict;
+      if (!(blend.snr >= opt.snrMin)) verdict = 'none';
+      else if (caShare >= 0.6 || (!li670ok && ca612.snr >= opt.snrMin)) verdict = 'ca';
+      else if (caShare >= 0.2) verdict = 'mixed';
+      else verdict = 'li';
+      b = { net: blend.net, snr: blend.snr, raw: blend.raw, cen: cenOff, caPred, excess, excessSd: sd, caShare, verdict, r612_616: lines.Ca616 && lines.Ca616.net > 0 ? ca612.net / lines.Ca616.net : NaN, ratio612: ca612.net > 0 ? blend.net / ca612.net : NaN };
+    }
+    return { shift, shiftN: est.n, shiftAuto: opt.autoShift && est.n >= 3, lines, blend610: b, gmax, gwl, nSat, nNear, total, locTotals,
+      sat: nSat ? 'saturated' : nNear ? 'near' : 'ok', opt };
+  }
+
+  /* ===== store-only ZIP writer ===== */
+  const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+  function crc32(u) { let c = 0xFFFFFFFF; for (let i = 0; i < u.length; i++) c = CRC[(c ^ u[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+  function zip(files) {   // files: [{name, text}]
+    const enc = new TextEncoder(), parts = [], central = []; let off = 0;
+    for (const f of files) {
+      const name = enc.encode(f.name), data = enc.encode(f.text), crc = crc32(data);
+      const h = new DataView(new ArrayBuffer(30));
+      h.setUint32(0, 0x04034b50, true); h.setUint16(4, 20, true); h.setUint16(6, 0x0800, true); h.setUint16(8, 0, true);
+      h.setUint32(14, crc, true); h.setUint32(18, data.length, true); h.setUint32(22, data.length, true); h.setUint16(26, name.length, true);
+      parts.push(new Uint8Array(h.buffer), name, data);
+      const c = new DataView(new ArrayBuffer(46));
+      c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true); c.setUint16(8, 0x0800, true);
+      c.setUint32(16, crc, true); c.setUint32(20, data.length, true); c.setUint32(24, data.length, true); c.setUint16(28, name.length, true); c.setUint32(42, off, true);
+      central.push(new Uint8Array(c.buffer), name);
+      off += 30 + name.length + data.length;
+    }
+    const csize = central.reduce((s, a) => s + a.length, 0);
+    const e = new DataView(new ArrayBuffer(22));
+    e.setUint32(0, 0x06054b50, true); e.setUint16(8, files.length, true); e.setUint16(10, files.length, true); e.setUint32(12, csize, true); e.setUint32(16, off, true);
+    return new Blob([...parts, ...central, new Uint8Array(e.buffer)], { type: 'application/zip' });
+  }
+
+  return { readTdms, tdmsToCsv, toSpectra, analyse, measure, LINES, CA_610_OVER_612, CA_612_OVER_616, toCsvRows, zip, lowerBound };
+})();
+if (typeof module !== 'undefined') module.exports = LIBS;
+
+</script>
+<script>
+(() => {
+'use strict';
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt = (v, d = 0) => !isFinite(v) ? '–' : v.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+const sig = (v, n = 3) => !isFinite(v) ? '–' : (v === 0 ? '0' : Number(v.toPrecision(n)).toLocaleString('en-US', { maximumSignificantDigits: n }));
+const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+const samples = [];       // {id, name, fileName, tdms, S, A, slot, example}
+let nextId = 1, selected = null;
+const NORMS = [['none', 'nothing (raw counts)'], ['total', 'total emission, all wavelengths'], ['H656', 'H I 656.28'], ['Ar811', 'Ar I 811.53'], ['Ca616', 'Ca I 616.22'], ['Na589', 'Na I 589.00'], ['K766', 'K I 766.49']];
+$('mNorm').innerHTML = NORMS.map(n => `<option value="${n[0]}">${n[1]}</option>`).join('');
+
+/* ---------- settings ---------- */
+function opts() {
+  return { ceiling: +$('oCeil').value || 65535, warnFrac: (+$('oWarn').value || 80) / 100, hw: +$('oHw').value || 0.15,
+    snrMin: +$('oSnr').value || 3, caRatio: +$('oCa').value || 0, autoShift: $('oAuto').checked, manualShift: +$('oShift').value || 0 };
+}
+function reanalyse() { for (const s of samples) s.A = LIBS.analyse(s.S, opts()); render(); }
+['oCeil', 'oWarn', 'oHw', 'oSnr', 'oCa', 'oAuto', 'oShift'].forEach(id => $(id).addEventListener('change', reanalyse));
+
+/* ---------- loading ---------- */
+function addBuffer(buf, fileName, example) {
+  const tdms = LIBS.readTdms(buf), S = LIBS.toSpectra(tdms, fileName);
+  const used = new Set(samples.map(s => s.slot)); let slot = 1; while (used.has(slot) && slot < 9) slot++;
+  const s = { id: nextId++, name: S.name, fileName, tdms, S, A: LIBS.analyse(S, opts()), slot, example: !!example };
+  samples.push(s); if (!selected) selected = s.id;
+}
+async function addFiles(files) {
+  const errs = [];
+  if (samples.some(s => s.example) && files.length) { const i = samples.findIndex(s => s.example); if (selected === samples[i].id) selected = null; samples.splice(i, 1); }
+  for (const f of files) {
+    try { addBuffer(await f.arrayBuffer(), f.name, false); }
+    catch (e) { errs.push(f.name + ': ' + e.message); }
+  }
+  if (!selected && samples.length) selected = samples[0].id;
+  $('msg').textContent = errs.join('  ');
+  render();
+}
+$('pick').onclick = () => $('file').click();
+$('file').onchange = (e) => { addFiles([...e.target.files]); e.target.value = ''; };
+const drop = $('drop');
+['dragenter', 'dragover'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave', 'drop'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop', e => addFiles([...e.dataTransfer.files]));
+window.addEventListener('dragover', e => e.preventDefault()); window.addEventListener('drop', e => e.preventDefault());
+
+/* ---------- metric ---------- */
+function metric(s) {
+  const li = s.A.lines.Li670, key = $('mMeasure').value, norm = $('mNorm').value;
+  if (!li) return { v: NaN, sd: NaN };
+  const den = norm === 'none' ? 1 : norm === 'total' ? s.A.total / 1e6 : (s.A.lines[norm] ? s.A.lines[norm].net : NaN);
+  const per = li.per.map((p, i) => p[key] / (norm === 'none' ? 1 : norm === 'total' ? s.A.locTotals[i] / 1e6 : s.A.lines[norm].per[i].net));
+  const mu = per.reduce((a, b) => a + b, 0) / per.length;
+  const sd = per.length > 1 ? Math.sqrt(per.reduce((a, b) => a + (b - mu) ** 2, 0) / (per.length - 1)) : 0;
+  return { v: li[key] / den, sd };
+}
+function metricName() {
+  const m = $('mMeasure').value === 'net' ? 'Li 670.78 height' : 'Li 670.78 area';
+  const n = $('mNorm').value; return n === 'none' ? m + ($('mMeasure').value === 'net' ? ' (counts)' : ' (counts·nm)') : n === 'total' ? m + ' per 10⁶ total counts' : m + ' ÷ ' + NORMS.find(x => x[0] === n)[1];
+}
+function metricKey() { return $('mMeasure').value + '/' + $('mNorm').value; }
+
+/* ---------- calibrations (kept in this browser) ---------- */
+let cals = []; try { cals = JSON.parse(localStorage.getItem('libs-li-cals') || '[]'); } catch (e) {}
+function saveCals() { try { localStorage.setItem('libs-li-cals', JSON.stringify(cals)); } catch (e) {} }
+function fillCal(sel) {
+  $('cal').innerHTML = '<option value="">none yet (relative comparison only)</option>' + cals.map((c, i) => `<option value="${i}">${esc(c.name)}</option>`).join('') + '<option value="new">add a calibration…</option>';
+  $('cal').value = sel ?? ''; $('calDel').classList.toggle('hide', $('cal').value === '' || $('cal').value === 'new');
+}
+$('cal').onchange = () => { const n = $('cal').value === 'new'; $('calForm').classList.toggle('hide', !n); $('calDel').classList.toggle('hide', n || $('cal').value === ''); if (!n) render(); };
+$('calCancel').onclick = () => { $('calForm').classList.add('hide'); fillCal(''); drawPT(); render(); };
+$('calSave').onclick = () => {
+  const slope = +$('calSlope').value; if (!$('calName').value.trim() || !isFinite(slope) || slope === 0) { $('msg').textContent = 'A calibration needs a name and a non-zero slope.'; return; }
+  $('msg').textContent = '';
+  cals.push({ name: $('calName').value.trim(), slope, intercept: +$('calInt').value || 0, unit: $('calUnit').value.trim() || 'ppm', key: metricKey(), metric: metricName() });
+  saveCals(); $('calForm').classList.add('hide'); fillCal(String(cals.length - 1)); render();
+};
+$('calDel').onclick = () => { const i = +$('cal').value; if (cals[i]) { cals.splice(i, 1); saveCals(); fillCal(''); drawPT(); render(); } };
+const activeCal = () => cals[+$('cal').value] && $('cal').value !== '' && $('cal').value !== 'new' ? cals[+$('cal').value] : null;
+
+/* ---------- status helpers ---------- */
+const pill = (cls, icon, text) => `<span class="pill ${cls}"><span aria-hidden="true">${icon}</span>${esc(text)}</span>`;
+function liStatus(s) {
+  const l = s.A.lines.Li670; if (!l) return pill('mute', '–', 'out of range');
+  if (l.sat !== 'ok') return pill('bad', '✕', l.sat === 'saturated' ? 'saturated' : 'near ceiling');
+  if (l.detected && l.snr >= 10) return pill('good', '✓', 'detected');
+  if (l.detected) return pill('warn', '!', 'weak');
+  return pill('mute', '–', 'not detected');
+}
+const V610 = { ca: ['warn', '!', 'calcium'], mixed: ['warn', '!', 'Ca + Li mixed'], li: ['good', '✓', 'mostly lithium'], none: ['mute', '–', 'no peak'] };
+function satPill(st) { return st === 'saturated' ? pill('bad', '✕', 'saturated') : st === 'near' ? pill('warn', '!', 'near ceiling') : pill('good', '✓', 'in range'); }
+
+/* ---------- rendering ---------- */
+function render() {
+  const sel = samples.find(s => s.id === selected) || samples[0]; if (sel) selected = sel.id;
+  // "relative to" choices
+  const relPrev = $('mRel').value;
+  $('mRel').innerHTML = '<option value="max">highest sample = 100%</option>' + samples.map(s => `<option value="${s.id}">${esc(s.name)} = 100%</option>`).join('');
+  if ([...$('mRel').options].some(o => o.value === relPrev)) $('mRel').value = relPrev;
+  const M = samples.map(metric);
+  const refV = $('mRel').value === 'max' ? Math.max(...M.map(m => m.v).filter(isFinite), 0) : (M[samples.findIndex(s => String(s.id) === $('mRel').value)] || {}).v;
+  const cal = activeCal();
+  const scaleMax = Math.max(...M.map(m => (m.v + m.sd) / refV).filter(isFinite), 1);
+
+  let h = `<thead><tr><th class="l" rowspan="2">Sample</th><th rowspan="2">Grid<br>locations</th>
+    <th class="grp" colspan="${cal ? 6 : 5}">Li I 670.78 nm</th><th class="grp" colspan="4">610.3 nm feature</th><th class="grp" colspan="2">Saturation</th><th rowspan="2" class="gl"></th></tr>
+    <tr><th class="gl mt">${esc(metricName())}<br>± SD over locations</th><th>signal/<br>noise</th><th class="l">status</th><th>relative</th><th class="l"></th>${cal ? `<th>${esc(cal.unit)}</th>` : ''}
+    <th class="gl">height</th><th>explained<br>by Ca</th><th>peak centre<br>(Ca 610.27, Li 610.36)</th><th class="l">it is</th>
+    <th class="gl">brightest pixel</th><th class="l">status</th></tr></thead><tbody>`;
+  samples.forEach((s, i) => {
+    const l = s.A.lines.Li670, b = s.A.blend610, m = M[i], rel = m.v / refV;
+    const w = Math.max(0, Math.min(1, rel / scaleMax)) * 100, e0 = Math.max(0, (m.v - m.sd) / refV / scaleMax) * 100, e1 = Math.min(100, (m.v + m.sd) / refV / scaleMax * 100);
+    h += `<tr class="pick ${s.id === selected ? 'sel' : ''}" data-id="${s.id}">
+      <td class="l nm"><span class="chip" style="background:var(--s${s.slot})"></span><span class="name">${esc(s.name)}</span>${s.example ? '<span class="eg">example</span>' : ''}</td>
+      <td>${s.S.locs.length}</td>
+      <td class="gl">${sig(m.v)} <span class="pm">± ${sig(m.sd, 2)}</span></td><td>${l ? fmt(l.snr, 1) : '–'}</td><td class="l">${liStatus(s)}</td>
+      <td>${isFinite(rel) ? fmt(rel * 100, 0) + '%' : '–'}</td>
+      <td class="l"><span class="bar" title="${esc(s.name)}: ${isFinite(rel) ? fmt(rel * 100, 0) : '–'}% ± ${fmt(m.sd / refV * 100, 0)}"><i style="width:${w}%;background:var(--s${s.slot})"></i>${m.sd > 0 && isFinite(rel) ? `<b style="left:${e0}%;width:${Math.max(0, e1 - e0)}%"></b>` : ''}</span></td>
+      ${cal ? `<td>${sig((m.v - cal.intercept) / cal.slope)}</td>` : ''}
+      <td class="gl">${b ? fmt(b.net) : '–'}</td><td>${b && isFinite(b.caShare) ? fmt(b.caShare * 100, 0) + '%' : '–'}</td><td>${b && b.verdict !== 'none' ? b.cen.toFixed(2) + ' nm' : '–'}</td><td class="l">${b ? pill(...V610[b.verdict]) : '–'}</td>
+      <td class="gl">${fmt(s.A.gmax)} <span class="pm">(${fmt(s.A.gmax / s.A.opt.ceiling * 100)}%) at ${s.A.gwl.toFixed(1)} nm</span></td><td class="l">${satPill(s.A.sat)}</td>
+      <td class="gl"><button class="mini" data-csv="${s.id}">CSV</button> <button class="mini" data-rm="${s.id}" aria-label="Remove ${esc(s.name)}">remove</button></td></tr>`;
+  });
+  if (!samples.length) h += `<tr><td class="l" colspan="16">No files loaded yet.</td></tr>`;
+  $('sumTable').innerHTML = h + '</tbody>';
+  let note = 'Height and noise come from the mean spectrum of each sample; ± is the standard deviation of the same measure taken at each grid location separately. Click a row to inspect that sample below.';
+  if (cal && cal.key !== metricKey()) note += ` The calibration “${cal.name}” was defined for ${cal.metric}, which is not the measure now selected.`;
+  if (samples.length === 1) note += ' With one sample loaded, relative abundance is 100% by definition: add more files to compare.';
+  $('sumNote').textContent = note;
+
+  // legend + verdict notes
+  $('legend').innerHTML = samples.map(s => `<span><span class="chip" style="background:var(--s${s.slot})"></span>${esc(s.name)}</span>`).join('');
+  $('verdicts').innerHTML = samples.map(s => `<p class="note"><span class="chip" style="background:var(--s${s.slot})"></span>${verdictText(s)}</p>`).join('');
+
+  // sample selector
+  $('selSample').innerHTML = samples.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join(''); if (sel) $('selSample').value = sel.id;
+  renderLines(sel); renderComp(); plots.forEach(p => p.draw());
+  $('zipBtn').disabled = $('sumBtn').disabled = !samples.length;
+}
+function verdictText(s) {
+  const A = s.A, l = A.lines.Li670, b = A.blend610, n = `<strong>${esc(s.name)}.</strong> `;
+  let t = n;
+  if (!l) return t + 'The 670.78 nm line is outside this spectrum.';
+  t += l.detected ? `Li I 670.78 is ${l.snr >= 10 ? 'clearly' : 'weakly'} detected: ${fmt(l.net)} counts above a baseline of ${fmt(l.base)}, ${fmt(l.snr, 1)} times the baseline noise. `
+                  : `Li I 670.78 is not detected above the baseline noise (signal/noise ${fmt(l.snr, 1)}). `;
+  const c671 = A.lines.Ca671;
+  if (c671 && c671.detected) t += `The Ca I 671.77 line beside it is ${sig(c671.net / Math.max(l.net, 1e-9), 2)} times taller, so any window wider than about ±0.5 nm would count calcium as lithium. `;
+  if (b && b.verdict !== 'none') {
+    t += `The 610.3 nm peak is ${fmt(b.net)} counts and centred at ${b.cen.toFixed(2)} nm. Ca I 612.22 predicts ${fmt(b.caPred)} counts of calcium there (${fmt(b.caShare * 100)}%). `;
+    if (b.verdict === 'ca') t += `Treat this peak as calcium, not lithium. `;
+    if (b.verdict === 'mixed') t += `Calcium and lithium both contribute; use the excess (${fmt(b.excess)} ± ${fmt(b.excessSd)} counts) with caution. `;
+    if (b.verdict === 'li') t += `Calcium contributes little; the peak is mostly Li I 610.36. `;
+    if (isFinite(b.r612_616) && b.r612_616 > LIBS.CA_612_OVER_616 * 1.1 && b.excess > 0)
+      t += `Ca I 612.22 ÷ 616.22 is ${b.r612_616.toFixed(2)} against ${LIBS.CA_612_OVER_616.toFixed(2)} expected, which points to self-absorption of the stronger calcium lines; the ${fmt(b.excess)} counts left over at 610.3 are better explained by that than by lithium. `;
+  }
+  t += A.sat === 'ok' ? `No pixel comes within ${fmt(A.opt.warnFrac * 100)}% of the ${fmt(A.opt.ceiling)}-count ceiling.` : A.sat === 'near' ? `${A.nNear} pixel readings are above ${fmt(A.opt.warnFrac * 100)}% of the ceiling.` : `${A.nSat} pixel readings are at the ceiling: lower the laser energy or gate, or use weaker lines.`;
+  if (!A.shiftAuto && A.opt.autoShift) t += ' Too few reference lines were found to estimate a wavelength shift, so none was applied.';
+  return t;
+}
+function renderLines(s) {
+  if (!s) { $('lineTable').innerHTML = ''; $('acqBody').innerHTML = ''; $('lineHead').textContent = 'Lines measured'; return; }
+  $('lineHead').textContent = 'Lines measured in ' + s.name;
+  const A = s.A;
+  let h = `<thead><tr><th class="l">Line</th><th>Expected<br>(air, nm)</th><th>Found at<br>(corrected, nm)</th><th>Height above<br>baseline</th><th>Baseline</th><th>Signal/<br>noise</th><th>Area<br>(counts·nm)</th><th>RSD over<br>locations</th><th>Brightest reading<br>at any location</th><th class="l">Status</th></tr></thead><tbody>`;
+  for (const L of LIBS.LINES) {
+    const m = A.lines[L.id]; if (!m) continue;
+    const blend = L.id === 'Li610' || L.id === 'Ca610';
+    if (L.id === 'Ca610') continue;
+    const b = A.blend610;
+    const st = m.sat !== 'ok' ? satPill(m.sat) : blend ? (b ? pill(...V610[b.verdict]) : '') : m.detected ? (m.snr >= 10 ? pill('good', '✓', 'detected') : pill('warn', '!', 'weak')) : pill('mute', '–', 'not detected');
+    h += `<tr><td class="l">${blend ? 'Li I 610.36 + Ca I 610.27 (unresolved)' : esc(L.label)}</td><td>${blend ? '610.27 / 610.36' : L.wl.toFixed(2)}</td><td>${(blend ? b && b.verdict !== 'none' : m.detected) ? ((blend ? b.cen : m.cen - A.shift)).toFixed(2) : '–'}</td>
+      <td>${fmt(blend && b ? b.net : m.net)}</td><td>${fmt(m.base)}</td><td>${fmt(blend && b ? b.snr : m.snr, 1)}</td><td>${fmt(m.area, 0)}</td><td>${m.locMean > 0 && m.detected ? fmt(m.locSd / m.locMean * 100) + '%' : '–'}</td>
+      <td>${fmt(m.rawMax)} <span class="pm">(${fmt(m.rawMax / A.opt.ceiling * 100)}%)</span></td><td class="l">${st}</td></tr>`;
+  }
+  $('lineTable').innerHTML = h + `</tbody>`;
+  $('acqBody').innerHTML = `<div><span>Wavelength shift applied</span><span>${A.shift >= 0 ? '+' : ''}${A.shift.toFixed(3)} nm (${A.shiftN} lines)</span></div><div><span>Pixels</span><span>${fmt(s.S.wl.length)}, ${s.S.wl[0].toFixed(1)}–${s.S.wl[s.S.wl.length - 1].toFixed(1)} nm</span></div>`
+    + s.S.settings.map(x => `<div><span>${esc(x.name)}</span><span>${x.varies ? 'varies by location' : sig(x.value, 6)}</span></div>`).join('');
+}
+
+/* ---------- companion elements ---------- */
+const PT = (() => {
+  const out = [], put = (s, r, c) => out.push([s, r, c]);
+  [['H', 1], ['He', 18]].forEach(x => put(x[0], 1, x[1]));
+  'Li Be B C N O F Ne'.split(' ').forEach((s, i) => put(s, 2, i < 2 ? i + 1 : i + 11));
+  'Na Mg Al Si P S Cl Ar'.split(' ').forEach((s, i) => put(s, 3, i < 2 ? i + 1 : i + 11));
+  ['K Ca Sc Ti V Cr Mn Fe Co Ni Cu Zn Ga Ge As Se Br Kr', 'Rb Sr Y Zr Nb Mo Tc Ru Rh Pd Ag Cd In Sn Sb Te I Xe', 'Cs Ba La Hf Ta W Re Os Ir Pt Au Hg Tl Pb Bi Po At Rn', 'Fr Ra Ac Rf Db Sg Bh Hs Mt Ds Rg Cn Nh Fl Mc Lv Ts Og']
+    .forEach((p, r) => p.split(' ').forEach((s, c) => put(s, r + 4, c + 1)));
+  'Ce Pr Nd Pm Sm Eu Gd Tb Dy Ho Er Tm Yb Lu'.split(' ').forEach((s, c) => put(s, 8, c + 4));
+  'Th Pa U Np Pu Am Cm Bk Cf Es Fm Md No Lr'.split(' ').forEach((s, c) => put(s, 9, c + 4));
+  return out;
+})();
+const K_S = new Set('Li Na K Rb Cs Be Mg Ca Sr Ba Al Ti Cr Mn Fe Cu'.split(' ')), K_W = new Set('H B C Si Sc V Co Ni Zn Ga Y Zr Mo Ag In Sn Pb La'.split(' ')),
+  K_X = new Set('N O F P S Cl Ge As Se Br Nb Ru Rh Pd Cd Sb Te I Hf Ta W Re Os Ir Pt Au Hg Tl Bi Ce Pr Nd Sm Eu Gd Tb Dy Ho Er Tm Yb Lu Th U'.split(' '));
+const PICKABLE = new Set(LIBS.LINES.filter(L => L.pref && L.el !== 'Li').map(L => L.el));
+let tracked = ['Na', 'K', 'Rb', 'Mg', 'Ca', 'Sr'];
+try { const t = JSON.parse(localStorage.getItem('libs-companions') || 'null'); if (Array.isArray(t)) tracked = t.filter(e => PICKABLE.has(e)); } catch (e) {}
+function setTracked(t) { tracked = t; try { localStorage.setItem('libs-companions', JSON.stringify(t)); } catch (e) {} drawPT(); renderComp(); }
+function drawPT() {
+  $('ptable').innerHTML = PT.map(([s, r, c]) => {
+    const k = K_S.has(s) ? 'k-s' : K_W.has(s) ? 'k-w' : K_X.has(s) ? 'k-x' : 'k-n', st = `style="grid-row:${r};grid-column:${c}"`;
+    if (s === 'Li') return `<div class="li" ${st} title="Lithium: always shown above">Li</div>`;
+    return PICKABLE.has(s) ? `<button class="${k}" ${st} data-el="${s}" aria-pressed="${tracked.includes(s)}">${s}</button>` : `<div class="${k}" ${st}>${s}</div>`;
+  }).join('');
+}
+$('ptable').addEventListener('click', (e) => { const b = e.target.closest('[data-el]'); if (!b) return; const el = b.dataset.el; setTracked(tracked.includes(el) ? tracked.filter(x => x !== el) : [...tracked, el]); });
+document.querySelectorAll('[data-pre]').forEach(b => b.onclick = () => setTracked(b.dataset.pre ? b.dataset.pre.split(',').filter(e => PICKABLE.has(e)) : []));
+$('cMode').onchange = () => renderComp();
+// One line per element for every sample: the weaker (less self-absorbed) line if it is detected
+// wherever the element is seen at all, otherwise the most sensitive line.
+function lineFor(el) {
+  const c = LIBS.LINES.filter(L => L.el === el && L.pref).sort((a, b) => a.pref - b.pref);
+  const seen = samples.filter(s => c.some(L => s.A.lines[L.id] && s.A.lines[L.id].detected));
+  for (const L of c) if (seen.length && seen.every(s => s.A.lines[L.id] && s.A.lines[L.id].detected)) return L;
+  return c[c.length - 1];
+}
+function renderComp() {
+  const order = PT.map(x => x[0]).filter(e => tracked.includes(e)), mode = $('cMode').value;
+  const prevEl = $('scEl').value;
+  $('scEl').innerHTML = order.map(e => `<option value="${e}">${e}</option>`).join('');
+  if (order.includes(prevEl)) $('scEl').value = prevEl;
+  if (!order.length || !samples.length) drawScatter();
+  if (!order.length || !samples.length) { $('compTable').innerHTML = `<tbody><tr><td class="l">${samples.length ? 'Pick elements in the table above.' : 'No files loaded yet.'}</td></tr></tbody>`; $('compNote').textContent = ''; return; }
+  const use = order.map(lineFor);
+  let h = `<thead><tr><th class="l">Sample</th><th>Li I 670.78</th>${use.map(L => `<th>${esc(L.el)}<br><span style="font-weight:400">${esc(L.label.replace(L.el + ' ', ''))}</span></th>`).join('')}</tr></thead><tbody>`;
+  const max = use.map(L => Math.max(0, ...samples.map(s => { const m = s.A.lines[L.id]; return m && m.detected ? m.net : 0; })));
+  const liMax = Math.max(0, ...samples.map(s => { const m = s.A.lines.Li670; return m && m.detected ? m.net : 0; }));
+  const show = (m, mx, li) => {
+    if (!m) return '<span class="nd">out of range</span>';
+    if (!m.detected) return '<span class="nd">not detected</span>';
+    const v = mode === 'height' ? fmt(m.net) : mode === 'rel' ? fmt(m.net / mx * 100) + '%' : (li && li.detected ? sig(m.net / li.net, 3) : '<span class="nd">no Li</span>');
+    return v + (m.sat !== 'ok' ? ` <span class="fl" title="${m.sat === 'near' ? 'Near the detector ceiling' : 'Saturated'}">!</span>` : '');
+  };
+  for (const s of samples) {
+    const li = s.A.lines.Li670;
+    h += `<tr><td class="l nm"><span class="chip" style="background:var(--s${s.slot})"></span>${esc(s.name)}</td><td>${li && li.detected ? (mode === 'rel' ? fmt(li.net / liMax * 100) + '%' : mode === 'ratio' ? '1' : fmt(li.net)) : '<span class="nd">not detected</span>'}</td>${use.map((L, i) => `<td>${show(s.A.lines[L.id], max[i], li)}</td>`).join('')}</tr>`;
+  }
+  $('compTable').innerHTML = h + '</tbody>';
+  drawScatter();
+  $('compNote').textContent = 'Each element uses one line for all samples: a weaker line where it is detected in every sample that shows the element, because the brightest lines flatten out (self-absorb) when an element is abundant. Rb and Cs sit beside argon lines in an argon purge, so only their clear lines are used. ! marks a peak near the detector ceiling.';
+}
+
+/* ---------- lithium against another element ---------- */
+let scPts = [];
+function drawScatter() {
+  const canvas = $('pSc'), ctx = canvas.getContext('2d'), dpr = window.devicePixelRatio || 1, W = canvas.clientWidth, H = canvas.clientHeight;
+  if (!W) return;
+  canvas.width = W * dpr; canvas.height = H * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
+  scPts = [];
+  const el = $('scEl').value, font = (px, wt = 400) => `${wt} ${px}px "EB Garamond", Garamond, serif`, ink2 = css('--ink2');
+  ctx.font = font(15); ctx.fillStyle = ink2; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  if (!el || !samples.length) { $('scHead').textContent = 'Lithium against another element'; ctx.fillText(samples.length ? 'Pick at least one element in the table above.' : 'No files loaded yet.', W / 2, H / 2); return; }
+  const L = lineFor(el); $('scHead').textContent = 'Li I 670.78 against ' + L.label;
+  const showLocs = $('scLocs').checked, data = [];
+  for (const s of samples) {
+    const m = s.A.lines[L.id], li = s.A.lines.Li670; if (!m || !li) continue;
+    data.push({ s, x: m.net, y: li.net, sx: m.locSd, sy: li.locSd, locs: m.per.map((q, i) => ({ x: q.net, y: li.per[i].net, name: s.S.locs[i].name })) });
+  }
+  if (!data.length) { ctx.fillText('These lines are outside the measured range.', W / 2, H / 2); return; }
+  let xa = 0, xb = 0, ya = 0, yb = 0;
+  for (const d of data) {
+    xa = Math.min(xa, d.x - d.sx); xb = Math.max(xb, d.x + d.sx); ya = Math.min(ya, d.y - d.sy); yb = Math.max(yb, d.y + d.sy);
+    if (showLocs) for (const q of d.locs) { xa = Math.min(xa, q.x); xb = Math.max(xb, q.x); ya = Math.min(ya, q.y); yb = Math.max(yb, q.y); }
+  }
+  xb = xb > xa ? xb + (xb - xa) * 0.08 : xa + 1; yb = yb > ya ? yb + (yb - ya) * 0.1 : ya + 1; if (xa < 0) xa -= (xb - xa) * 0.04; if (ya < 0) ya -= (yb - ya) * 0.04;
+  const P = { l: 72, r: 16, t: 12, b: 46 }, X = (v) => P.l + (v - xa) / (xb - xa) * (W - P.l - P.r), Y = (v) => H - P.b - (v - ya) / (yb - ya) * (H - P.t - P.b);
+  const step = (span, n) => { const r = span / n, p = 10 ** Math.floor(Math.log10(r)), m = r / p; return (m < 1.5 ? 1 : m < 3.5 ? 2 : m < 7.5 ? 5 : 10) * p; };
+  ctx.font = font(13.5); ctx.lineWidth = 1;
+  const sy = step(yb - ya, 5), sx = step(xb - xa, Math.max(3, Math.floor(W / 110)));
+  ctx.textAlign = 'right';
+  for (let v = Math.ceil(ya / sy) * sy; v <= yb; v += sy) { ctx.strokeStyle = css('--rule2'); ctx.beginPath(); ctx.moveTo(P.l, Y(v)); ctx.lineTo(W - P.r, Y(v)); ctx.stroke(); ctx.fillText(Math.round(v).toLocaleString('en-US'), P.l - 6, Y(v)); }
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  for (let v = Math.ceil(xa / sx) * sx; v <= xb; v += sx) { ctx.strokeStyle = css('--rule2'); ctx.beginPath(); ctx.moveTo(X(v), P.t); ctx.lineTo(X(v), H - P.b); ctx.stroke(); ctx.fillText(Math.round(v).toLocaleString('en-US'), X(v), H - P.b + 6); }
+  ctx.strokeStyle = css('--rule'); ctx.beginPath(); ctx.moveTo(P.l, P.t); ctx.lineTo(P.l, H - P.b); ctx.lineTo(W - P.r, H - P.b); ctx.stroke();
+  ctx.fillText(L.label + ' height, counts', (P.l + W - P.r) / 2, H - 20);
+  ctx.save(); ctx.translate(11, (P.t + H - P.b) / 2); ctx.rotate(-Math.PI / 2); ctx.textBaseline = 'middle'; ctx.fillText('Li I 670.78 height, counts', 0, 0); ctx.restore();
+  for (const d of data) {
+    const col = css('--s' + d.s.slot);
+    if (showLocs) { ctx.fillStyle = col; ctx.globalAlpha = 0.45; for (const q of d.locs) { ctx.beginPath(); ctx.arc(X(q.x), Y(q.y), 3.2, 0, 6.3); ctx.fill(); scPts.push({ px: X(q.x), py: Y(q.y), t: d.s.name, sub: q.name, x: q.x, y: q.y, col }); } ctx.globalAlpha = 1; }
+  }
+  for (const d of data) {
+    const col = css('--s' + d.s.slot), x = X(d.x), y = Y(d.y);
+    ctx.strokeStyle = css('--ink'); ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(X(d.x - d.sx), y); ctx.lineTo(X(d.x + d.sx), y); ctx.moveTo(x, Y(d.y - d.sy)); ctx.lineTo(x, Y(d.y + d.sy)); ctx.stroke();
+    ctx.fillStyle = col; ctx.strokeStyle = css('--panel'); ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, 6.5, 0, 6.3); ctx.fill(); ctx.stroke();
+    scPts.push({ px: x, py: y, t: d.s.name, sub: 'mean of ' + d.locs.length + ' locations', x: d.x, y: d.y, col, big: true });
+    if (data.length <= 4) { ctx.font = font(13.5); ctx.fillStyle = ink2; ctx.textAlign = x > W * 0.6 ? 'right' : 'left'; ctx.textBaseline = 'bottom'; ctx.fillText(d.s.name, x + (x > W * 0.6 ? -10 : 10), y - 6); }
+  }
+  canvas._label = L.label;
+}
+(() => {
+  const canvas = $('pSc'), tip = canvas.parentElement.querySelector('.tip');
+  canvas.addEventListener('pointermove', (e) => {
+    const r = canvas.getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top; let best = null, bd = 14 * 14;
+    for (const q of scPts) { const d = (q.px - px) ** 2 + (q.py - py) ** 2; if (d < bd || (q.big && d < 14 * 14 && best && !best.big)) { best = q; bd = d; } }
+    if (!best) { tip.style.display = 'none'; return; }
+    tip.innerHTML = `<div><span class="chip" style="background:${best.col}"></span><strong>${esc(best.t)}</strong></div><div>${esc(best.sub)}</div><div>${esc(canvas._label)}: ${fmt(best.x)}</div><div>Li I 670.78: ${fmt(best.y)}</div>`;
+    tip.style.display = 'block';
+    const tw = tip.offsetWidth; tip.style.left = (canvas.offsetLeft + (best.px + 14 + tw > r.width ? best.px - tw - 12 : best.px + 14)) + 'px'; tip.style.top = (canvas.offsetTop + Math.max(0, best.py - 20)) + 'px';
+  });
+  canvas.addEventListener('pointerleave', () => { tip.style.display = 'none'; });
+  $('scEl').onchange = $('scLocs').onchange = drawScatter;
+  window.addEventListener('resize', drawScatter);
+  new MutationObserver(drawScatter).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', drawScatter);
+})();
+
+/* ---------- table actions ---------- */
+$('sumTable').addEventListener('click', (e) => {
+  const csv = e.target.closest('[data-csv]'), rm = e.target.closest('[data-rm]'), row = e.target.closest('tr[data-id]');
+  if (csv) { const s = samples.find(x => x.id === +csv.dataset.csv); save(s.name + '.csv', LIBS.tdmsToCsv(s.tdms)); return; }
+  if (rm) { const i = samples.findIndex(x => x.id === +rm.dataset.rm); samples.splice(i, 1); if (selected === +rm.dataset.rm) selected = samples[0] ? samples[0].id : null; render(); return; }
+  if (row) { selected = +row.dataset.id; render(); }
+});
+['mMeasure', 'mNorm', 'mRel'].forEach(id => $(id).addEventListener('change', render));
+$('selSample').onchange = () => { selected = +$('selSample').value; render(); };
+$('showLocs').onchange = $('logY').onchange = () => plots.forEach(p => p.draw());
+document.querySelectorAll('[data-z]').forEach(b => b.onclick = () => { const [a, c] = b.dataset.z.split(',').map(Number); pFull.setRange(a, c); });
+
+/* ---------- downloads ---------- */
+async function save(filename, data) {
+  $('msg').textContent = '';
+  try {
+    const blob = data instanceof Blob ? data : new Blob([data], { type: 'text/csv' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  } catch (e) { $('msg').textContent = 'Saving is not available in this view.'; }
+}
+function summaryCsv() {
+  const cal = activeCal(), M = samples.map(metric);
+  const refV = $('mRel').value === 'max' ? Math.max(...M.map(m => m.v).filter(isFinite), 0) : (M[samples.findIndex(s => String(s.id) === $('mRel').value)] || {}).v;
+  const ids = LIBS.LINES.filter(L => L.id !== 'Li610' && L.id !== 'Ca610').map(L => L.id);
+  const head = ['sample', 'file', 'grid_locations', 'wavelength_shift_nm', 'li670_height', 'li670_height_sd_locations', 'li670_signal_to_noise', 'li670_detected', 'li670_area',
+    'compare_measure', 'compare_value', 'compare_sd', 'relative_percent', ...(cal ? ['calibration', 'concentration_' + cal.unit] : []),
+    'f610_height', 'f610_centre_nm', 'ca612_height', 'ca_predicted_at_610', 'f610_excess', 'f610_excess_sd', 'f610_fraction_calcium', 'f610_assignment', 'ca612_over_ca616',
+    'max_counts', 'max_counts_nm', 'ceiling_counts', 'saturation', ...ids.map(i => i + '_height'), ...ids.map(i => i + '_snr')];
+  const r6 = (v) => isFinite(v) ? Number(v.toPrecision(6)) : '';
+  const rows = samples.map((s, i) => {
+    const A = s.A, l = A.lines.Li670 || {}, b = A.blend610 || {};
+    return [s.name, s.fileName, s.S.locs.length, r6(A.shift), r6(l.net), r6(l.locSd), r6(l.snr), l.detected ? 'yes' : 'no', r6(l.area),
+      metricName(), r6(M[i].v), r6(M[i].sd), r6(M[i].v / refV * 100), ...(cal ? [cal.name, r6((M[i].v - cal.intercept) / cal.slope)] : []),
+      r6(b.net), r6(b.cen), r6((A.lines.Ca612 || {}).net), r6(b.caPred), r6(b.excess), r6(b.excessSd), r6(b.caShare), b.verdict || '', r6(b.r612_616),
+      r6(A.gmax), r6(A.gwl), A.opt.ceiling, A.sat, ...ids.map(k => r6((A.lines[k] || {}).net)), ...ids.map(k => r6((A.lines[k] || {}).snr))];
+  });
+  return LIBS.toCsvRows([head, ...rows]);
+}
+$('sumBtn').onclick = () => save('lithium_comparison.csv', summaryCsv());
+$('zipBtn').onclick = () => {
+  const seen = {}, files = samples.map(s => { let n = s.name; if (seen[n]) n += '_' + (++seen[s.name]); else seen[n] = 1; return { name: n + '.csv', text: LIBS.tdmsToCsv(s.tdms) }; });
+  files.push({ name: 'lithium_comparison.csv', text: summaryCsv() });
+  save('libs_csv_' + new Date().toISOString().slice(0, 10) + '.zip', LIBS.zip(files));
+};
+
+/* ---------- plots ---------- */
+function makePlot(canvas, cfg) {
+  const ctx = canvas.getContext('2d'), tip = canvas.parentElement.querySelector('.tip');
+  let x0 = cfg.range[0], x1 = cfg.range[1], drag = null, hover = null, geo = null;
+  const P = { l: 68, r: 12, t: 30, b: 34 };
+  function series() {
+    const out = [], sel = samples.find(s => s.id === selected);
+    if (cfg.full && $('showLocs').checked && sel) sel.S.locs.forEach(l => out.push({ name: l.name, color: css('--ink3'), x: sel.S.wl, y: l.y, w: 1, a: 0.55 }));
+    for (const s of samples) if (!cfg.full || s.id === selected || !$('showLocs').checked) out.push({ name: s.name, color: css('--s' + s.slot), x: s.S.wl, y: s.S.mean, w: s.id === selected ? 2.2 : 1.4, a: 1 });
+    return out;
+  }
+  function draw() {
+    const dpr = window.devicePixelRatio || 1, W = canvas.clientWidth, H = canvas.clientHeight;
+    if (!W) return;
+    canvas.width = W * dpr; canvas.height = H * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
+    const ser = series(), log = cfg.full && $('logY').checked, ink2 = css('--ink2'), rule = css('--rule'), rule2 = css('--rule2');
+    const font = (px, wt = 400) => `${wt} ${px}px "EB Garamond", Garamond, serif`;
+    let lo = Infinity, hi = -Infinity;
+    for (const s of ser) { const a = LIBS.lowerBound(s.x, x0), b = LIBS.lowerBound(s.x, x1); for (let i = a; i < b; i++) { const v = s.y[i]; if (v < lo) lo = v; if (v > hi) hi = v; } }
+    if (!isFinite(lo)) { lo = 0; hi = 1; }
+    if (log) { lo = Math.max(lo, 1); hi = Math.max(hi, lo * 10); } else { const pad = (hi - lo) * 0.08 || 1; hi += pad; lo = Math.max(lo - pad, Math.min(0, lo)); }
+    const fy = log ? Math.log10 : (v) => v, y0 = fy(lo), y1 = fy(hi);
+    const X = (v) => P.l + (v - x0) / (x1 - x0) * (W - P.l - P.r), Y = (v) => H - P.b - (fy(Math.max(v, log ? 1 : -Infinity)) - y0) / (y1 - y0) * (H - P.t - P.b);
+    geo = { X, W, H, ser };
+    // grid and axes
+    ctx.font = font(13.5); ctx.fillStyle = ink2; ctx.lineWidth = 1;
+    const step = (span, n) => { const r = span / n, p = 10 ** Math.floor(Math.log10(r)), m = r / p; return (m < 1.5 ? 1 : m < 3.5 ? 2 : m < 7.5 ? 5 : 10) * p; };
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    if (log) { for (let e = Math.ceil(y0); e <= Math.floor(y1); e++) { const y = Y(10 ** e); ctx.strokeStyle = rule2; ctx.beginPath(); ctx.moveTo(P.l, y); ctx.lineTo(W - P.r, y); ctx.stroke(); ctx.fillText((10 ** e).toLocaleString('en-US'), P.l - 6, y); } }
+    else { const st = step(hi - lo, 5); for (let v = Math.ceil(lo / st) * st; v <= hi; v += st) { const y = Y(v); ctx.strokeStyle = rule2; ctx.beginPath(); ctx.moveTo(P.l, y); ctx.lineTo(W - P.r, y); ctx.stroke(); ctx.fillText(Math.round(v).toLocaleString('en-US'), P.l - 6, y); } }
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    const sx = step(x1 - x0, Math.max(3, Math.floor(W / 90))), dec = sx < 0.1 ? 2 : sx < 1 ? 1 : 0;
+    for (let v = Math.ceil(x0 / sx) * sx; v <= x1 + 1e-9; v += sx) { const x = X(v); ctx.strokeStyle = rule; ctx.beginPath(); ctx.moveTo(x, H - P.b); ctx.lineTo(x, H - P.b + 4); ctx.stroke(); ctx.fillText(v.toFixed(dec), x, H - P.b + 6); }
+    ctx.strokeStyle = rule; ctx.beginPath(); ctx.moveTo(P.l, H - P.b); ctx.lineTo(W - P.r, H - P.b); ctx.stroke();
+    ctx.textAlign = 'right'; ctx.fillText('wavelength, nm', W - P.r, H - 14);
+    ctx.save(); ctx.translate(9, (P.t + H - P.b) / 2); ctx.rotate(-Math.PI / 2); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('counts', 0, 0); ctx.restore();
+    // line markers
+    const sel = samples.find(s => s.id === selected) || samples[0];
+    if (sel && x1 - x0 < 90) {
+      const sh = sel.A.shift; let lastX = -1e9, rowi = 0; ctx.textBaseline = 'top'; ctx.textAlign = 'left';
+      const vis = LIBS.LINES.filter(L => L.wl + sh > x0 && L.wl + sh < x1).sort((a, b) => a.wl - b.wl);
+      for (const L of vis) {
+        const x = X(L.wl + sh), li = L.role === 'li';
+        ctx.strokeStyle = li ? css('--ink') : css('--ink3'); ctx.setLineDash(li ? [5, 3] : [2, 3]); ctx.lineWidth = li ? 1.3 : 1;
+        ctx.beginPath(); ctx.moveTo(x, P.t - 2); ctx.lineTo(x, H - P.b); ctx.stroke(); ctx.setLineDash([]);
+        ctx.font = font(13.5, li ? 600 : 400); const w = ctx.measureText(L.label).width;
+        rowi = x < lastX + 6 ? (rowi + 1) % 2 : 0; if (rowi === 0) lastX = x + w;
+        let tx = x + 3; if (tx + w > W - 2) tx = x - w - 3;
+        ctx.fillStyle = li ? css('--ink') : ink2; ctx.fillText(L.label, tx, 2 + rowi * 14);
+      }
+    }
+    // data
+    ctx.save(); ctx.beginPath(); ctx.rect(P.l, P.t - 2, W - P.l - P.r, H - P.t - P.b + 2); ctx.clip();
+    for (const s of ser) {
+      const a = Math.max(0, LIBS.lowerBound(s.x, x0) - 1), b = Math.min(s.x.length, LIBS.lowerBound(s.x, x1) + 1);
+      ctx.strokeStyle = s.color; ctx.globalAlpha = s.a; ctx.lineWidth = s.w; ctx.lineJoin = 'round'; ctx.beginPath();
+      for (let i = a; i < b; i++) { const x = X(s.x[i]), y = Y(s.y[i]); i === a ? ctx.moveTo(x, y) : ctx.lineTo(x, y); }
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    if (drag) { ctx.fillStyle = css('--ink'); ctx.globalAlpha = 0.08; ctx.fillRect(Math.min(drag.a, drag.b), P.t, Math.abs(drag.b - drag.a), H - P.t - P.b); ctx.globalAlpha = 1; }
+    if (hover != null && !drag) {
+      ctx.strokeStyle = css('--ink3'); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(X(hover), P.t); ctx.lineTo(X(hover), H - P.b); ctx.stroke();
+      for (const s of ser.filter(q => q.a === 1)) { const i = nearest(s.x, hover); ctx.fillStyle = s.color; ctx.strokeStyle = css('--panel'); ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(X(s.x[i]), Y(s.y[i]), 4, 0, 6.3); ctx.fill(); ctx.stroke(); }
+    }
+    ctx.restore();
+  }
+  const nearest = (x, v) => { let i = LIBS.lowerBound(x, v); if (i >= x.length) i = x.length - 1; if (i > 0 && v - x[i - 1] < x[i] - v) i--; return i; };
+  const toWl = (px) => x0 + (px - P.l) / (canvas.clientWidth - P.l - P.r) * (x1 - x0);
+  const pos = (e) => e.clientX - canvas.getBoundingClientRect().left;
+  canvas.addEventListener('pointerdown', (e) => { drag = { a: pos(e), b: pos(e) }; canvas.setPointerCapture(e.pointerId); });
+  canvas.addEventListener('pointermove', (e) => {
+    const px = pos(e);
+    if (drag) { drag.b = px; tip.style.display = 'none'; draw(); return; }
+    if (!geo || px < P.l || px > geo.W - P.r) { hover = null; tip.style.display = 'none'; draw(); return; }
+    hover = toWl(px); draw();
+    const main = geo.ser.filter(q => q.a === 1);
+    tip.innerHTML = `<div><strong>${hover.toFixed(2)} nm</strong></div>` + main.slice(0, 9).map(s => `<div><span class="chip" style="background:${s.color}"></span>${fmt(s.y[nearest(s.x, hover)])}  ${esc(s.name)}</div>`).join('');
+    tip.style.display = 'block';
+    const tw = tip.offsetWidth, left = px + 16 + tw > geo.W ? px - tw - 10 : px + 16;
+    tip.style.left = (canvas.offsetLeft + Math.max(0, left)) + 'px'; tip.style.top = (canvas.offsetTop + P.t + 6) + 'px';
+  });
+  canvas.addEventListener('pointerup', () => { if (drag && Math.abs(drag.b - drag.a) > 6) { const a = toWl(Math.min(drag.a, drag.b)), b = toWl(Math.max(drag.a, drag.b)); x0 = a; x1 = b; } drag = null; draw(); });
+  canvas.addEventListener('pointerleave', () => { hover = null; tip.style.display = 'none'; if (!drag) draw(); });
+  canvas.addEventListener('dblclick', () => { x0 = cfg.range[0]; x1 = cfg.range[1]; draw(); });
+  return { draw, setRange: (a, b) => { x0 = a; x1 = b; draw(); } };
+}
+const pFull = makePlot($('pFull'), { range: [186, 1052], full: true });
+const plots = [makePlot($('p670'), { range: [669.2, 672.6] }), makePlot($('p610'), { range: [609.3, 617.2] }), pFull];
+window.addEventListener('resize', () => plots.forEach(p => p.draw()));
+new MutationObserver(() => plots.forEach(p => p.draw())).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => plots.forEach(p => p.draw()));
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => plots.forEach(p => p.draw()));
+
+/* ---------- start ---------- */
+fillCal(''); drawPT(); render();
+})();
+</script>
+</body>
+</html>
