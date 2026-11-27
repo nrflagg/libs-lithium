@@ -119,7 +119,6 @@ td .nd{color:var(--ink3)} td .fl{color:var(--warn);font-weight:600}
 .describe{border:1px solid var(--ink);border-radius:4px;background:var(--panel);padding:14px 16px;display:flex;flex-direction:column;gap:10px}
 #descTable input{width:7em;text-align:right;font-variant-numeric:tabular-nums}
 #descTable input.bad{border-color:var(--bad)}
-#descTable input.guess{border-style:dashed}
 #descTable tr.all td{background:var(--rule2)}
 .hide{display:none!important}
 </style>
@@ -147,7 +146,7 @@ td .nd{color:var(--ink3)} td .fl{color:var(--warn);font-weight:600}
         <label><input type="radio" name="descKind" value="field"> Field, core or mapped samples (no experimental conditions)</label>
       </div>
       <div id="descExp" class="describe-exp">
-      <p class="small">Enter what you varied for each file. Leave a box empty if it doesn't apply. Values from the file name (like <code>pH7.5</code>, <code>24h</code> or <code>sal35</code>) are filled in for you to check. The top row sets a value for every new sample at once.</p>
+      <p class="small">Enter what you varied for each file. Leave a box empty if it doesn't apply. The top row sets a value for every new sample at once.</p>
       <div class="tablewrap"><table id="descTable"></table></div>
       <div class="row">
         <label>Add a variable <input type="text" id="descVar" size="16" placeholder="e.g. temperature (°C)"></label>
@@ -949,32 +948,18 @@ let lastKind = 'experiment'; try { lastKind = localStorage.getItem('libs-last-ki
 const kindNow = () => (document.querySelector('input[name="descKind"]:checked') || {}).value || lastKind;
 function showKind() { $('descExp').classList.toggle('hide', kindNow() !== 'experiment'); $('descSave').textContent = kindNow() === 'experiment' ? 'Save values' : 'Done'; }
 document.querySelectorAll('input[name="descKind"]').forEach(r => r.addEventListener('change', showKind));
-function guessFromName(name, v) {
-  const n = name.replace(/\.tdms$/i, ''), b = v.replace(/\s*[\(\[].*[\)\]]\s*$/, '').trim().toLowerCase(), unit = (v.match(/[\(\[](.*)[\)\]]/) || [])[1] || '';
-  const num = (re) => { const m = n.match(re); return m ? Number(m[1].replace(',', '.')) : NaN; };
-  if (b === 'ph') return num(/(?:^|[^a-z])ph[\s_-]?(\d{1,2}(?:[.,]\d+)?)/i);
-  if (b === 'salinity') return num(/(?:^|[^a-z])sal(?:inity)?[\s_-]?(\d+(?:[.,]\d+)?)/i);
-  if (b === 'time' && (!unit || /^h(ours?|rs?)?$/i.test(unit))) return num(/(?:^|[^a-z0-9.])(\d+(?:[.,]\d+)?)[\s_-]?(?:h|hr|hrs|hours?)(?![a-z])/i);
-  if (b === 'time' && /^d(ays?)?$/i.test(unit)) return num(/(?:^|[^a-z0-9.])(\d+(?:[.,]\d+)?)[\s_-]?(?:d|days?)(?![a-z])/i);
-  if (b === 'depth' && (!unit || unit === 'm')) return num(/(?:^|[^a-z0-9.])(\d+(?:[.,]\d+)?)[\s_-]?m(?![a-z])/i);
-  return NaN;
-}
 function openDescribe(list) {
   pending = list;
   let h = `<thead><tr><th class="l">Sample</th>${vars.map(v => `<th>${esc(v)}</th>`).join('')}</tr></thead><tbody>`;
   if (list.length > 1) h += `<tr class="all"><td class="l"><em>All new samples</em></td>${vars.map((v, j) => `<td><input type="text" inputmode="decimal" data-all="${j}" aria-label="${esc(v)} for all new samples"></td>`).join('')}</tr>`;
   for (const s of list) {
     h += `<tr><td class="l nm"><span class="chip" style="background:var(--s${s.slot})"></span>${esc(s.name)}</td>` + vars.map((v, j) => {
-      let x = getVal(s, v), guess = false;
-      if (!isFinite(x)) { x = guessFromName(s.name, v); guess = isFinite(x); }
-      return `<td><input type="text" inputmode="decimal" data-k="${esc(keyOf(s.name))}" data-v="${j}" value="${isFinite(x) ? x : ''}"${guess ? ' class="guess" title="Read from the file name: check it"' : ''} aria-label="${esc(v)} for ${esc(s.name)}"></td>`;
+      const x = getVal(s, v);
+      return `<td><input type="text" inputmode="decimal" data-k="${esc(keyOf(s.name))}" data-v="${j}" value="${isFinite(x) ? x : ''}" aria-label="${esc(v)} for ${esc(s.name)}"></td>`;
     }).join('') + '</tr>';
   }
   $('descTable').innerHTML = h + '</tbody>';
-  // default to an experiment if the file names carry conditions, otherwise to the last choice
-  const named = $('descTable').querySelector('input.guess');
-  const k = named ? 'experiment' : lastKind;
-  document.querySelectorAll('input[name="descKind"]').forEach(r => { r.checked = r.value === k; });
+  document.querySelectorAll('input[name="descKind"]').forEach(r => { r.checked = r.value === lastKind; });
   showKind();
   $('describe').classList.remove('hide');
   $('describe').scrollIntoView({ block: 'nearest', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
@@ -983,8 +968,8 @@ function openDescribe(list) {
 }
 $('descTable').addEventListener('input', (e) => {
   const inp = e.target; if (inp.tagName !== 'INPUT') return;
-  const t = inp.value.trim(); inp.classList.toggle('bad', t !== '' && !isFinite(Number(t))); inp.classList.remove('guess');
-  if (inp.dataset.all !== undefined) $('descTable').querySelectorAll(`input[data-v="${inp.dataset.all}"]`).forEach(x => { x.value = inp.value; x.classList.remove('guess', 'bad'); x.classList.toggle('bad', t !== '' && !isFinite(Number(t))); });
+  const t = inp.value.trim(); inp.classList.toggle('bad', t !== '' && !isFinite(Number(t)));
+  if (inp.dataset.all !== undefined) $('descTable').querySelectorAll(`input[data-v="${inp.dataset.all}"]`).forEach(x => { x.value = inp.value; x.classList.remove('bad'); x.classList.toggle('bad', t !== '' && !isFinite(Number(t))); });
 });
 $('descTable').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('descSave').click(); });
 $('descSave').onclick = () => {
