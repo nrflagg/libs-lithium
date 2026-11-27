@@ -112,6 +112,9 @@ details>*+*{margin-top:10px}
 #ptable button[aria-pressed="true"],.chip.k-on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
 #ptable .li{background:var(--ink);color:var(--paper);font-weight:600}
 td .nd{color:var(--ink3)} td .fl{color:var(--warn);font-weight:600}
+#varTable input{width:7em;text-align:right;font-variant-numeric:tabular-nums}
+#varTable input.bad{border-color:var(--bad)}
+#varTable th button{margin-left:6px}
 .hide{display:none!important}
 </style>
 </head>
@@ -124,8 +127,8 @@ td .nd{color:var(--ink3)} td .fl{color:var(--warn);font-weight:600}
 
   <section>
     <div id="drop">
-      <p><strong>Drop .tdms files here</strong>, or choose them. Each file becomes one sample; every numeric channel in it (one per grid location) is treated as a replicate.</p>
-      <input type="file" id="file" accept=".tdms" multiple class="hide">
+      <p><strong>Drop .tdms files here</strong> (and a CSV of sample variables, if you have one), or choose them. Each file becomes one sample; every numeric channel in it (one per grid location) is treated as a replicate.</p>
+      <input type="file" id="file" accept=".tdms,.csv" multiple class="hide">
       <button class="primary" id="pick">Add .tdms files</button>
       <button id="zipBtn">Download all CSVs (.zip)</button>
       <button id="sumBtn">Download comparison table (.csv)</button>
@@ -152,9 +155,22 @@ td .nd{color:var(--ink3)} td .fl{color:var(--warn);font-weight:600}
     </div>
     <div class="tablewrap"><table id="sumTable"></table></div>
     <p class="small" id="sumNote"></p>
+    <details id="varBox" open>
+      <summary>Sample variables for the x-axis</summary>
+      <p class="small">Give each sample a value for whatever you varied: time, pH, salinity, depth, temperature. Type values in, or load a CSV whose first column is the sample (file) name and whose other columns are variables, one per column, with units in the header if you like, for example <code>sample,time (h),pH,salinity (g/L)</code>. Values are remembered in this browser; the CSV is the way to share them.</p>
+      <div class="row">
+        <label>New variable <input type="text" id="varName" size="16" placeholder="e.g. temperature (°C)"></label>
+        <button class="mini" id="varAdd">Add</button>
+        <button class="mini" id="varCsvBtn">Load CSV…</button><input type="file" id="varCsv" accept=".csv,.txt" class="hide">
+        <button class="mini" id="varTpl">Download as CSV</button>
+      </div>
+      <div class="tablewrap"><table id="varTable"></table></div>
+    </details>
     <div class="row">
-      <label>Order <select id="relSort"><option value="load">as loaded</option><option value="desc">highest first</option><option value="name">by name</option></select></label>
+      <label>x-axis <select id="relX"></select></label>
+      <label id="relSortL">Order <select id="relSort"><option value="load">as loaded</option><option value="desc">highest first</option><option value="name">by name</option></select></label>
       <label><input type="checkbox" id="relLocs" checked> show each grid location</label>
+      <label id="relLineL"><input type="checkbox" id="relLine"> connect points in x order</label>
     </div>
     <div class="plot wide"><h3 id="relHead">Relative lithium by sample</h3><canvas id="pRel" style="cursor:default"></canvas><div class="tip"></div></div>
     <p class="small">Large markers are sample means with ± one standard deviation across grid locations; small dots are individual locations, spread sideways so they don't overlap. Hollow markers mean Li I 670.78 was not detected above noise in that sample.</p>
@@ -602,8 +618,8 @@ function addBuffer(buf, fileName, example) {
   const s = { id: nextId++, name: S.name, fileName, tdms, S, A: LIBS.analyse(S, opts()), slot, example: !!example };
   samples.push(s); if (!selected) selected = s.id;
 }
-async function addFiles(files) {
-  const errs = [];
+async function addFiles(all) {
+  const errs = [], csvs = all.filter(f => /\.(csv|txt)$/i.test(f.name)), files = all.filter(f => !/\.(csv|txt)$/i.test(f.name));
   if (samples.some(s => s.example) && files.length) { const i = samples.findIndex(s => s.example); if (selected === samples[i].id) selected = null; samples.splice(i, 1); }
   for (const f of files) {
     try { addBuffer(await f.arrayBuffer(), f.name, false); }
@@ -612,6 +628,7 @@ async function addFiles(files) {
   if (!selected && samples.length) selected = samples[0].id;
   $('msg').textContent = errs.join('  ');
   render();
+  for (const f of csvs) await loadVarCsv(f);
 }
 $('pick').onclick = () => $('file').click();
 $('file').onchange = (e) => { addFiles([...e.target.files]); e.target.value = ''; };
@@ -711,7 +728,7 @@ function render() {
 
   // sample selector
   $('selSample').innerHTML = samples.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join(''); if (sel) $('selSample').value = sel.id;
-  renderLines(sel); renderComp(); drawRel(); plots.forEach(p => p.draw());
+  renderLines(sel); renderComp(); renderVars(); drawRel(); plots.forEach(p => p.draw());
   $('zipBtn').disabled = $('sumBtn').disabled = !samples.length;
 }
 function verdictText(s) {
@@ -816,6 +833,87 @@ function renderComp() {
   $('compNote').textContent = 'Each element uses one line for all samples: a weaker line where it is detected in every sample that shows the element, because the brightest lines flatten out (self-absorb) when an element is abundant. Rb and Cs sit beside argon lines in an argon purge, so only their clear lines are used. ! marks a peak near the detector ceiling.';
 }
 
+/* ---------- sample variables (x-axis values) ---------- */
+const keyOf = (n) => String(n).trim().replace(/\.tdms$/i, '').toLowerCase();
+let vars = ['time', 'pH', 'salinity'], vals = {};
+try { const v = JSON.parse(localStorage.getItem('libs-sample-vars') || 'null'); if (v && Array.isArray(v.vars)) { vars = v.vars; vals = v.vals || {}; } } catch (e) {}
+function saveVars() { try { localStorage.setItem('libs-sample-vars', JSON.stringify({ vars, vals })); } catch (e) {} }
+const getVal = (s, v) => { const o = vals[keyOf(s.name)]; return o && isFinite(o[v]) ? o[v] : NaN; };
+function renderVars() {
+  const prev = $('relX').value;
+  $('relX').innerHTML = '<option value="">sample (one column each)</option>' + vars.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join('');
+  $('relX').value = vars.includes(prev) ? prev : '';
+  if (!samples.length) { $('varTable').innerHTML = '<tbody><tr><td class="l">No files loaded yet.</td></tr></tbody>'; return; }
+  let h = `<thead><tr><th class="l">Sample</th>${vars.map((v, j) => `<th>${esc(v)}<button class="mini" data-vdel="${j}" aria-label="Remove ${esc(v)}" title="Remove this variable">×</button></th>`).join('')}</tr></thead><tbody>`;
+  for (const s of samples) {
+    h += `<tr><td class="l nm"><span class="chip" style="background:var(--s${s.slot})"></span>${esc(s.name)}</td>` +
+      vars.map((v, j) => { const x = getVal(s, v); return `<td><input type="text" inputmode="decimal" data-k="${esc(keyOf(s.name))}" data-v="${j}" value="${isFinite(x) ? x : ''}" aria-label="${esc(v)} for ${esc(s.name)}"></td>`; }).join('') + '</tr>';
+  }
+  $('varTable').innerHTML = h + '</tbody>';
+}
+$('varTable').addEventListener('input', (e) => {
+  const inp = e.target.closest('input[data-k]'); if (!inp) return;
+  const v = vars[+inp.dataset.v], t = inp.value.trim(), x = Number(t);
+  inp.classList.toggle('bad', t !== '' && !isFinite(x));
+  const o = vals[inp.dataset.k] || (vals[inp.dataset.k] = {});
+  if (t === '' || !isFinite(x)) delete o[v]; else o[v] = x;
+  saveVars(); if ($('relX').value === v) drawRel();
+});
+$('varTable').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-vdel]'); if (!b) return;
+  vars.splice(+b.dataset.vdel, 1); saveVars(); renderVars(); drawRel();
+});
+$('varAdd').onclick = () => {
+  const n = $('varName').value.trim(); if (!n) { $('msg').textContent = 'Type a name for the new variable first.'; return; }
+  if (!vars.includes(n)) vars.push(n); $('varName').value = ''; $('msg').textContent = ''; saveVars(); renderVars();
+};
+$('varName').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('varAdd').click(); });
+$('varCsvBtn').onclick = () => $('varCsv').click();
+$('varCsv').onchange = async (e) => { for (const f of e.target.files) await loadVarCsv(f); e.target.value = ''; };
+function parseCsv(text) {
+  const rows = []; let row = [], cell = '', q = false;
+  const delim = (text.split(/\r?\n/)[0].match(/\t/g) || []).length > (text.split(/\r?\n/)[0].match(/,/g) || []).length ? '\t' : ',';
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) { if (c === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += c; }
+    else if (c === '"') q = true;
+    else if (c === delim) { row.push(cell); cell = ''; }
+    else if (c === '\n' || c === '\r') { if (c === '\r' && text[i + 1] === '\n') i++; row.push(cell); rows.push(row); row = []; cell = ''; }
+    else cell += c;
+  }
+  if (cell !== '' || row.length) { row.push(cell); rows.push(row); }
+  return rows.filter(r => r.some(x => x.trim() !== ''));
+}
+async function loadVarCsv(f) {
+  const rows = parseCsv((await f.text()).replace(/^\uFEFF/, ''));
+  if (rows.length < 2 || rows[0].length < 2) { $('msg').textContent = f.name + ': expected a header row and at least two columns (sample, then one or more variables).'; return; }
+  const head = rows[0].map(h => h.trim()), names = head.slice(1);
+  const base = (n) => n.replace(/\s*[\(\[].*[\)\]]\s*$/, '').trim().toLowerCase();
+  const unused = (v) => !Object.values(vals).some(o => o && isFinite(o[v]));
+  names.forEach(n => {
+    if (!n || vars.includes(n)) return;
+    const j = vars.findIndex(v => base(v) === base(n) && unused(v));   // an empty "time" column becomes "time (h)"
+    if (j >= 0) vars[j] = n; else vars.push(n);
+  });
+  const known = new Set(samples.map(s => keyOf(s.name))); let matched = 0, unknown = [];
+  for (const r of rows.slice(1)) {
+    const k = keyOf(r[0] || ''); if (!k) continue;
+    const o = vals[k] || (vals[k] = {});
+    names.forEach((n, j) => { const t = (r[j + 1] || '').trim(), x = Number(t); if (n && t !== '' && isFinite(x)) o[n] = x; });
+    if (known.has(k)) matched++; else unknown.push(r[0].trim());
+  }
+  saveVars(); renderVars();
+  if (names.length === 1 && !$('relX').value) $('relX').value = names[0];
+  drawRel();
+  $('msg').textContent = `${f.name}: values for ${matched} loaded sample${matched === 1 ? '' : 's'}` +
+    (unknown.length ? `; ${unknown.length} row${unknown.length === 1 ? '' : 's'} kept for files not loaded yet (${unknown.slice(0, 3).join(', ')}${unknown.length > 3 ? ', …' : ''}).` : '.');
+  $('msg').style.color = 'var(--ink2)'; setTimeout(() => { $('msg').style.color = ''; }, 8000);
+}
+$('varTpl').onclick = () => {
+  const rows = [['sample', ...vars], ...samples.map(s => [s.name, ...vars.map(v => { const x = getVal(s, v); return isFinite(x) ? x : ''; })])];
+  save('sample_variables.csv', LIBS.toCsvRows(rows));
+};
+
 /* ---------- relative lithium scatter ---------- */
 let relPts = [];
 function relRef(M) {
@@ -827,32 +925,49 @@ function drawRel() {
   canvas.width = W * dpr; canvas.height = H * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
   relPts = [];
   const font = (px, wt = 400) => `${wt} ${px}px "EB Garamond", Garamond, serif`, ink2 = css('--ink2');
+  const xv = $('relX').value, numeric = !!xv;
+  $('relSortL').classList.toggle('hide', numeric); $('relLineL').classList.toggle('hide', !numeric);
   const cal = activeCal(), M = samples.map(metric), refV = relRef(M);
-  $('relHead').textContent = cal ? `Lithium by sample, ${cal.unit} (${cal.name})` : 'Relative lithium by sample, from ' + metricName().replace(/ \((counts|counts·nm)\)$/, '');
-  if (!samples.length || !(refV > 0)) {
-    ctx.font = font(15); ctx.fillStyle = ink2; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(samples.length ? 'The reference sample has no lithium signal, so nothing can be scaled to it.' : 'No files loaded yet.', W / 2, H / 2); return;
-  }
+  const what = cal ? `Lithium, ${cal.unit} (${cal.name})` : 'Relative lithium, from ' + metricName().replace(/ \((counts|counts·nm)\)$/, '');
+  $('relHead').textContent = numeric ? `${what}, against ${xv}` : `${what}, by sample`;
+  const msg = (t) => { ctx.font = font(15); ctx.fillStyle = ink2; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(t, W / 2, H / 2); };
+  if (!samples.length) return msg('No files loaded yet.');
+  if (!cal && !(refV > 0)) return msg('The reference sample has no lithium signal, so nothing can be scaled to it.');
   const conv = cal ? (v) => (v - cal.intercept) / cal.slope : (v) => v / refV * 100;
-  let rows = samples.map((s, i) => ({ s, m: M[i], v: conv(M[i].v), lo: conv(M[i].v - M[i].sd), hi: conv(M[i].v + M[i].sd), per: M[i].per.map(conv),
+  let rows = samples.map((s, i) => ({ s, m: M[i], x: numeric ? getVal(s, xv) : NaN, v: conv(M[i].v), lo: conv(M[i].v - M[i].sd), hi: conv(M[i].v + M[i].sd), per: M[i].per.map(conv),
     det: !!(s.A.lines.Li670 && s.A.lines.Li670.detected) }));
-  const ord = $('relSort').value;
-  if (ord === 'desc') rows.sort((a, b) => (isFinite(b.v) ? b.v : -Infinity) - (isFinite(a.v) ? a.v : -Infinity));
-  if (ord === 'name') rows.sort((a, b) => a.s.name.localeCompare(b.s.name, undefined, { numeric: true }));
+  let missing = 0;
+  if (numeric) { missing = rows.filter(r => !isFinite(r.x)).length; rows = rows.filter(r => isFinite(r.x)).sort((a, b) => a.x - b.x); }
+  else {
+    const ord = $('relSort').value;
+    if (ord === 'desc') rows.sort((a, b) => (isFinite(b.v) ? b.v : -Infinity) - (isFinite(a.v) ? a.v : -Infinity));
+    if (ord === 'name') rows.sort((a, b) => a.s.name.localeCompare(b.s.name, undefined, { numeric: true }));
+  }
+  if (!rows.length) return msg(`No loaded sample has a value for ${xv} yet. Enter values in the table above, or load a CSV.`);
   const showLocs = $('relLocs').checked;
   let ya = 0, yb = 0;
   for (const r of rows) { for (const v of [r.v, r.lo, r.hi, ...(showLocs ? r.per : [])]) if (isFinite(v)) { ya = Math.min(ya, v); yb = Math.max(yb, v); } }
   if (!(yb > ya)) yb = ya + 1;
   yb += (yb - ya) * 0.08; if (ya < 0) ya -= (yb - ya) * 0.04;
-  // x labels: shortened names, angled when crowded
-  ctx.font = font(13.5);
-  const P = { l: 72, r: 16, t: 12 }, slot = (W - P.l - P.r) / rows.length;
-  const fullW = Math.max(...rows.map(r => ctx.measureText(r.s.name).width)), angled = fullW > slot - 8;
-  const short = (n) => angled && n.length > 40 ? n.slice(0, 18) + '…' + n.slice(-18) : n;
-  const labels = rows.map(r => short(r.s.name)), lw = Math.max(...labels.map(t => ctx.measureText(t).width));
-  P.b = angled ? Math.min(150, lw * 0.6 + 30) : 34;
-  const X = (i) => P.l + slot * (i + 0.5), Y = (v) => H - P.b - (v - ya) / (yb - ya) * (H - P.t - P.b);
   const step = (span, n) => { const r = span / n, p = 10 ** Math.floor(Math.log10(r)), m = r / p; return (m < 1.5 ? 1 : m < 3.5 ? 2 : m < 7.5 ? 5 : 10) * p; };
+  ctx.font = font(13.5);
+  const P = { l: 72, r: 16, t: 12 };
+  let X, labels, angled = false, slot = 0, xa = 0, xb = 1;
+  if (numeric) {
+    xa = Math.min(...rows.map(r => r.x)); xb = Math.max(...rows.map(r => r.x));
+    const pad = xb > xa ? (xb - xa) * 0.06 : Math.max(Math.abs(xa) * 0.1, 1); xa -= pad; xb += pad;
+    P.b = 52 + (missing ? 18 : 0);
+    X = (x) => P.l + (x - xa) / (xb - xa) * (W - P.l - P.r);
+  } else {
+    slot = (W - P.l - P.r) / rows.length;
+    const fullW = Math.max(...rows.map(r => ctx.measureText(r.s.name).width)); angled = fullW > slot - 8;
+    const short = (n) => angled && n.length > 40 ? n.slice(0, 18) + '…' + n.slice(-18) : n;
+    labels = rows.map(r => short(r.s.name));
+    const lw = Math.max(...labels.map(t => ctx.measureText(t).width));
+    P.b = angled ? Math.min(150, lw * 0.6 + 30) : 34;
+    X = (i) => P.l + slot * (i + 0.5);
+  }
+  const Y = (v) => H - P.b - (v - ya) / (yb - ya) * (H - P.t - P.b);
   const sy = step(yb - ya, 5);
   ctx.fillStyle = ink2; ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.lineWidth = 1;
   for (let v = Math.ceil(ya / sy) * sy; v <= yb; v += sy) {
@@ -863,33 +978,49 @@ function drawRel() {
   ctx.strokeStyle = css('--rule'); ctx.beginPath(); ctx.moveTo(P.l, P.t); ctx.lineTo(P.l, H - P.b); ctx.lineTo(W - P.r, H - P.b); ctx.stroke();
   ctx.save(); ctx.translate(11, (P.t + H - P.b) / 2); ctx.rotate(-Math.PI / 2); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText(cal ? 'Li, ' + cal.unit : 'Li relative to reference, %', 0, 0); ctx.restore();
-  rows.forEach((r, i) => {
-    ctx.fillStyle = ink2; ctx.font = font(13.5);
-    if (angled) { ctx.save(); ctx.translate(X(i), H - P.b + 8); ctx.rotate(-Math.PI / 5); ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText(labels[i], 0, 0); ctx.restore(); }
-    else { ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(labels[i], X(i), H - P.b + 6); }
-  });
-  const half = Math.min(slot * 0.3, 40);
-  rows.forEach((r, i) => {
-    const col = css('--s' + r.s.slot), x = X(i);
-    if (showLocs) {
-      ctx.fillStyle = col; ctx.globalAlpha = 0.5;
-      r.per.forEach((v, k) => {
-        if (!isFinite(v)) return;
-        const jx = x + (r.per.length > 1 ? (((k * 0.618034) % 1) - 0.5) * 2 * half : 0);
-        ctx.beginPath(); ctx.arc(jx, Y(v), 3.2, 0, 6.3); ctx.fill();
-        relPts.push({ px: jx, py: Y(v), r, sub: r.s.S.locs[k].name, v, col });
-      });
-      ctx.globalAlpha = 1;
-    }
+  if (numeric) {
+    const sx = step(xb - xa, Math.max(3, Math.floor(W / 110))); ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    for (let v = Math.ceil(xa / sx) * sx; v <= xb + 1e-12; v += sx) { ctx.strokeStyle = css('--rule2'); ctx.beginPath(); ctx.moveTo(X(v), P.t); ctx.lineTo(X(v), H - P.b); ctx.stroke(); ctx.fillText(sig(v, 4), X(v), H - P.b + 6); }
+    ctx.fillText(xv, (P.l + W - P.r) / 2, H - P.b + 26);
+    if (missing) { ctx.textAlign = 'right'; ctx.fillStyle = css('--ink3'); ctx.fillText(`${missing} sample${missing === 1 ? '' : 's'} without a ${xv} value not shown`, W - P.r, H - 16); }
+  } else {
+    rows.forEach((r, i) => {
+      ctx.fillStyle = ink2;
+      if (angled) { ctx.save(); ctx.translate(X(i), H - P.b + 8); ctx.rotate(-Math.PI / 5); ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText(labels[i], 0, 0); ctx.restore(); }
+      else { ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(labels[i], X(i), H - P.b + 6); }
+    });
+  }
+  const px = (r, i) => numeric ? X(r.x) : X(i);
+  if (numeric && $('relLine').checked && rows.length > 1) {
+    ctx.strokeStyle = css('--ink3'); ctx.lineWidth = 1.5; ctx.beginPath();
+    rows.filter(r => isFinite(r.v)).forEach((r, k) => { const x = X(r.x), y = Y(r.v); k ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }); ctx.stroke();
+  }
+  const half = numeric ? 0 : Math.min(slot * 0.3, 40), labelBoxes = [];
+  if (showLocs) rows.forEach((r, i) => {
+    const col = css('--s' + r.s.slot), x = px(r, i);
+    ctx.fillStyle = col; ctx.globalAlpha = 0.5;
+    r.per.forEach((v, k) => {
+      if (!isFinite(v)) return;
+      const jx = x + (r.per.length > 1 ? (((k * 0.618034) % 1) - 0.5) * 2 * half : 0);
+      ctx.beginPath(); ctx.arc(jx, Y(v), 3.2, 0, 6.3); ctx.fill();
+      relPts.push({ px: jx, py: Y(v), r, sub: r.s.S.locs[k].name, v, col });
+    });
+    ctx.globalAlpha = 1;
   });
   rows.forEach((r, i) => {
     if (!isFinite(r.v)) return;
-    const col = css('--s' + r.s.slot), x = X(i), y = Y(r.v);
+    const col = css('--s' + r.s.slot), x = px(r, i), y = Y(r.v);
     if (r.m.sd > 0) { ctx.strokeStyle = css('--ink'); ctx.lineWidth = 1.3; ctx.beginPath(); ctx.moveTo(x, Y(r.lo)); ctx.lineTo(x, Y(r.hi)); ctx.moveTo(x - 5, Y(r.lo)); ctx.lineTo(x + 5, Y(r.lo)); ctx.moveTo(x - 5, Y(r.hi)); ctx.lineTo(x + 5, Y(r.hi)); ctx.stroke(); }
     ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, 7, 0, 6.3);
     if (r.det) { ctx.fillStyle = col; ctx.fill(); ctx.strokeStyle = css('--panel'); ctx.stroke(); }
     else { ctx.fillStyle = css('--panel'); ctx.fill(); ctx.strokeStyle = col; ctx.lineWidth = 2.2; ctx.stroke(); }
     relPts.push({ px: x, py: y, r, sub: 'mean of ' + r.per.length + ' locations' + (r.det ? '' : ' (Li not detected)'), v: r.v, col, big: true });
+    if (numeric && rows.length <= 8) {
+      ctx.font = font(13); const tw = ctx.measureText(r.s.name).width, right = x > W * 0.7;
+      const tries = [[right ? x - 10 - tw : x + 10, y - 22], [right ? x - 10 - tw : x + 10, y + 6]];
+      const spot = tries.find(([lx, ly]) => lx > P.l && lx + tw < W - P.r && !labelBoxes.some(b => lx < b[0] + b[2] && lx + tw > b[0] && ly < b[1] + 16 && ly + 16 > b[1]));
+      if (spot) { labelBoxes.push([spot[0], spot[1], tw]); ctx.fillStyle = ink2; ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillText(r.s.name, spot[0], spot[1]); }
+    }
   });
 }
 (() => {
@@ -899,12 +1030,12 @@ function drawRel() {
     for (const q of relPts) { const d = (q.px - px) ** 2 + (q.py - py) ** 2; if (d < bd || (q.big && best && !best.big && d < 14 * 14)) { best = q; bd = d; } }
     if (!best) { tip.style.display = 'none'; return; }
     const cal = activeCal(), unit = cal ? ' ' + cal.unit : '%';
-    tip.innerHTML = `<div><span class="chip" style="background:${best.col}"></span><strong>${esc(best.r.s.name)}</strong></div><div>${esc(best.sub)}</div><div>${sig(best.v, 3)}${esc(unit)}${best.big && best.r.m.sd > 0 ? ' ± ' + sig(best.r.hi - best.r.v, 2) + esc(unit) : ''}</div>`;
+    tip.innerHTML = `<div><span class="chip" style="background:${best.col}"></span><strong>${esc(best.r.s.name)}</strong></div><div>${esc(best.sub)}</div>${$('relX').value && isFinite(best.r.x) ? `<div>${esc($('relX').value)}: ${sig(best.r.x, 4)}</div>` : ''}<div>Li ${sig(best.v, 3)}${esc(unit)}${best.big && best.r.m.sd > 0 ? ' ± ' + sig(best.r.hi - best.r.v, 2) + esc(unit) : ''}</div>`;
     tip.style.display = 'block';
     const tw = tip.offsetWidth; tip.style.left = (canvas.offsetLeft + (best.px + 14 + tw > rc.width ? best.px - tw - 12 : best.px + 14)) + 'px'; tip.style.top = (canvas.offsetTop + Math.max(0, best.py - 20)) + 'px';
   });
   canvas.addEventListener('pointerleave', () => { tip.style.display = 'none'; });
-  $('relSort').onchange = $('relLocs').onchange = drawRel;
+  $('relSort').onchange = $('relLocs').onchange = $('relLine').onchange = $('relX').onchange = drawRel;
   window.addEventListener('resize', drawRel);
   new MutationObserver(drawRel).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', drawRel);
@@ -1000,14 +1131,14 @@ function summaryCsv() {
   const cal = activeCal(), M = samples.map(metric);
   const refV = $('mRel').value === 'max' ? Math.max(...M.map(m => m.v).filter(isFinite), 0) : (M[samples.findIndex(s => String(s.id) === $('mRel').value)] || {}).v;
   const ids = LIBS.LINES.filter(L => L.id !== 'Li610' && L.id !== 'Ca610').map(L => L.id);
-  const head = ['sample', 'file', 'grid_locations', 'wavelength_shift_nm', 'li670_height', 'li670_height_sd_locations', 'li670_signal_to_noise', 'li670_detected', 'li670_area',
+  const head = ['sample', 'file', ...vars, 'grid_locations', 'wavelength_shift_nm', 'li670_height', 'li670_height_sd_locations', 'li670_signal_to_noise', 'li670_detected', 'li670_area',
     'compare_measure', 'compare_value', 'compare_sd', 'relative_percent', ...(cal ? ['calibration', 'concentration_' + cal.unit] : []),
     'f610_height', 'f610_centre_nm', 'ca612_height', 'ca_predicted_at_610', 'f610_excess', 'f610_excess_sd', 'f610_fraction_calcium', 'f610_assignment', 'ca612_over_ca616',
     'max_counts', 'max_counts_nm', 'ceiling_counts', 'saturation', ...ids.map(i => i + '_height'), ...ids.map(i => i + '_snr')];
   const r6 = (v) => isFinite(v) ? Number(v.toPrecision(6)) : '';
   const rows = samples.map((s, i) => {
     const A = s.A, l = A.lines.Li670 || {}, b = A.blend610 || {};
-    return [s.name, s.fileName, s.S.locs.length, r6(A.shift), r6(l.net), r6(l.locSd), r6(l.snr), l.detected ? 'yes' : 'no', r6(l.area),
+    return [s.name, s.fileName, ...vars.map(v => r6(getVal(s, v))), s.S.locs.length, r6(A.shift), r6(l.net), r6(l.locSd), r6(l.snr), l.detected ? 'yes' : 'no', r6(l.area),
       metricName(), r6(M[i].v), r6(M[i].sd), r6(M[i].v / refV * 100), ...(cal ? [cal.name, r6((M[i].v - cal.intercept) / cal.slope)] : []),
       r6(b.net), r6(b.cen), r6((A.lines.Ca612 || {}).net), r6(b.caPred), r6(b.excess), r6(b.excessSd), r6(b.caShare), b.verdict || '', r6(b.r612_616),
       r6(A.gmax), r6(A.gwl), A.opt.ceiling, A.sat, ...ids.map(k => r6((A.lines[k] || {}).net)), ...ids.map(k => r6((A.lines[k] || {}).snr))];
