@@ -9,6 +9,7 @@ What it does:
 - Converts each `.tdms` file to CSV (one column per channel, the same layout as `nptdms` `as_dataframe().to_csv()`).
 - Measures Li I 670.78 nm in each sample and ranks samples against one another, with the spread across grid locations.
 - Plots relative lithium for every sample as a scatter, with each grid location shown and the mean ± one standard deviation.
+- When you import files from an experiment, asks for each sample's conditions (time, pH, salinity, or any variable you add), pre-filled from file names such as `pH4.5_24h_sal35`.
 - Lets you give each sample values for experimental variables (time, pH, salinity, depth, or any other), typed in or loaded from a CSV, and plot lithium against any of them.
 - Checks the 610.3 nm feature for calcium (Ca I 610.27 overlaps Li I 610.36) using Ca I 612.22.
 - Flags peaks near the detector ceiling and flat-topped peaks.

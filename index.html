@@ -115,6 +115,12 @@ td .nd{color:var(--ink3)} td .fl{color:var(--warn);font-weight:600}
 #varTable input{width:7em;text-align:right;font-variant-numeric:tabular-nums}
 #varTable input.bad{border-color:var(--bad)}
 #varTable th button{margin-left:6px}
+.describe-exp{display:flex;flex-direction:column;gap:10px}
+.describe{border:1px solid var(--ink);border-radius:4px;background:var(--panel);padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+#descTable input{width:7em;text-align:right;font-variant-numeric:tabular-nums}
+#descTable input.bad{border-color:var(--bad)}
+#descTable input.guess{border-style:dashed}
+#descTable tr.all td{background:var(--rule2)}
 .hide{display:none!important}
 </style>
 </head>
@@ -134,6 +140,25 @@ td .nd{color:var(--ink3)} td .fl{color:var(--warn);font-weight:600}
       <button id="sumBtn">Download comparison table (.csv)</button>
     </div>
     <div id="msg" role="status"></div>
+    <div id="describe" class="describe hide" role="region" aria-labelledby="descHead">
+      <h3 id="descHead">Describe the new samples</h3>
+      <div class="row" role="radiogroup" aria-label="Kind of samples">
+        <label><input type="radio" name="descKind" value="experiment"> From an experiment</label>
+        <label><input type="radio" name="descKind" value="field"> Field, core or mapped samples (no experimental conditions)</label>
+      </div>
+      <div id="descExp" class="describe-exp">
+      <p class="small">Enter what you varied for each file. Leave a box empty if it doesn't apply. Values from the file name (like <code>pH7.5</code>, <code>24h</code> or <code>sal35</code>) are filled in for you to check. The top row sets a value for every new sample at once.</p>
+      <div class="tablewrap"><table id="descTable"></table></div>
+      <div class="row">
+        <label>Add a variable <input type="text" id="descVar" size="16" placeholder="e.g. temperature (°C)"></label>
+        <button class="mini" id="descVarAdd">Add</button>
+      </div>
+      </div>
+      <div class="row">
+        <button class="primary" id="descSave">Save</button>
+        <button id="descSkip">Skip for now</button>
+      </div>
+    </div>
   </section>
 
   <section>
@@ -620,15 +645,19 @@ function addBuffer(buf, fileName, example) {
 }
 async function addFiles(all) {
   const errs = [], csvs = all.filter(f => /\.(csv|txt)$/i.test(f.name)), files = all.filter(f => !/\.(csv|txt)$/i.test(f.name));
+  for (const f of csvs) await loadVarCsv(f);
   if (samples.some(s => s.example) && files.length) { const i = samples.findIndex(s => s.example); if (selected === samples[i].id) selected = null; samples.splice(i, 1); }
+  const added = [];
   for (const f of files) {
-    try { addBuffer(await f.arrayBuffer(), f.name, false); }
+    try { addBuffer(await f.arrayBuffer(), f.name, false); added.push(samples[samples.length - 1]); }
     catch (e) { errs.push(f.name + ': ' + e.message); }
   }
   if (!selected && samples.length) selected = samples[0].id;
-  $('msg').textContent = errs.join('  ');
+  if (errs.length) $('msg').textContent = errs.join('  ');
   render();
-  for (const f of csvs) await loadVarCsv(f);
+  // Ask for sample values unless a CSV in the same drop already covered every new file.
+  const covered = csvs.length && added.every(s => vals[keyOf(s.name)] && Object.keys(vals[keyOf(s.name)]).length);
+  if (added.length && !covered) openDescribe(added);
 }
 $('pick').onclick = () => $('file').click();
 $('file').onchange = (e) => { addFiles([...e.target.files]); e.target.value = ''; };
@@ -913,6 +942,73 @@ $('varTpl').onclick = () => {
   const rows = [['sample', ...vars], ...samples.map(s => [s.name, ...vars.map(v => { const x = getVal(s, v); return isFinite(x) ? x : ''; })])];
   save('sample_variables.csv', LIBS.toCsvRows(rows));
 };
+
+/* ---------- describe new samples at import ---------- */
+let pending = [];   // samples waiting for values
+let lastKind = 'experiment'; try { lastKind = localStorage.getItem('libs-last-kind') || 'experiment'; } catch (e) {}
+const kindNow = () => (document.querySelector('input[name="descKind"]:checked') || {}).value || lastKind;
+function showKind() { $('descExp').classList.toggle('hide', kindNow() !== 'experiment'); $('descSave').textContent = kindNow() === 'experiment' ? 'Save values' : 'Done'; }
+document.querySelectorAll('input[name="descKind"]').forEach(r => r.addEventListener('change', showKind));
+function guessFromName(name, v) {
+  const n = name.replace(/\.tdms$/i, ''), b = v.replace(/\s*[\(\[].*[\)\]]\s*$/, '').trim().toLowerCase(), unit = (v.match(/[\(\[](.*)[\)\]]/) || [])[1] || '';
+  const num = (re) => { const m = n.match(re); return m ? Number(m[1].replace(',', '.')) : NaN; };
+  if (b === 'ph') return num(/(?:^|[^a-z])ph[\s_-]?(\d{1,2}(?:[.,]\d+)?)/i);
+  if (b === 'salinity') return num(/(?:^|[^a-z])sal(?:inity)?[\s_-]?(\d+(?:[.,]\d+)?)/i);
+  if (b === 'time' && (!unit || /^h(ours?|rs?)?$/i.test(unit))) return num(/(?:^|[^a-z0-9.])(\d+(?:[.,]\d+)?)[\s_-]?(?:h|hr|hrs|hours?)(?![a-z])/i);
+  if (b === 'time' && /^d(ays?)?$/i.test(unit)) return num(/(?:^|[^a-z0-9.])(\d+(?:[.,]\d+)?)[\s_-]?(?:d|days?)(?![a-z])/i);
+  if (b === 'depth' && (!unit || unit === 'm')) return num(/(?:^|[^a-z0-9.])(\d+(?:[.,]\d+)?)[\s_-]?m(?![a-z])/i);
+  return NaN;
+}
+function openDescribe(list) {
+  pending = list;
+  let h = `<thead><tr><th class="l">Sample</th>${vars.map(v => `<th>${esc(v)}</th>`).join('')}</tr></thead><tbody>`;
+  if (list.length > 1) h += `<tr class="all"><td class="l"><em>All new samples</em></td>${vars.map((v, j) => `<td><input type="text" inputmode="decimal" data-all="${j}" aria-label="${esc(v)} for all new samples"></td>`).join('')}</tr>`;
+  for (const s of list) {
+    h += `<tr><td class="l nm"><span class="chip" style="background:var(--s${s.slot})"></span>${esc(s.name)}</td>` + vars.map((v, j) => {
+      let x = getVal(s, v), guess = false;
+      if (!isFinite(x)) { x = guessFromName(s.name, v); guess = isFinite(x); }
+      return `<td><input type="text" inputmode="decimal" data-k="${esc(keyOf(s.name))}" data-v="${j}" value="${isFinite(x) ? x : ''}"${guess ? ' class="guess" title="Read from the file name: check it"' : ''} aria-label="${esc(v)} for ${esc(s.name)}"></td>`;
+    }).join('') + '</tr>';
+  }
+  $('descTable').innerHTML = h + '</tbody>';
+  // default to an experiment if the file names carry conditions, otherwise to the last choice
+  const named = $('descTable').querySelector('input.guess');
+  const k = named ? 'experiment' : lastKind;
+  document.querySelectorAll('input[name="descKind"]').forEach(r => { r.checked = r.value === k; });
+  showKind();
+  $('describe').classList.remove('hide');
+  $('describe').scrollIntoView({ block: 'nearest', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  const first = kindNow() === 'experiment' ? $('descTable').querySelector('input') : document.querySelector('input[name="descKind"]:checked');
+  if (first) first.focus({ preventScroll: true });
+}
+$('descTable').addEventListener('input', (e) => {
+  const inp = e.target; if (inp.tagName !== 'INPUT') return;
+  const t = inp.value.trim(); inp.classList.toggle('bad', t !== '' && !isFinite(Number(t))); inp.classList.remove('guess');
+  if (inp.dataset.all !== undefined) $('descTable').querySelectorAll(`input[data-v="${inp.dataset.all}"]`).forEach(x => { x.value = inp.value; x.classList.remove('guess', 'bad'); x.classList.toggle('bad', t !== '' && !isFinite(Number(t))); });
+});
+$('descTable').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('descSave').click(); });
+$('descSave').onclick = () => {
+  lastKind = kindNow(); try { localStorage.setItem('libs-last-kind', lastKind); } catch (e) {}
+  if (lastKind !== 'experiment') { $('msg').textContent = ''; $('describe').classList.add('hide'); pending = []; return; }
+  const bad = $('descTable').querySelector('input.bad');
+  if (bad) { $('msg').textContent = 'Some values are not numbers (outlined in red). Use digits only, for example 7.5.'; bad.focus(); return; }
+  $('descTable').querySelectorAll('input[data-k]').forEach(inp => {
+    const v = vars[+inp.dataset.v], t = inp.value.trim(), o = vals[inp.dataset.k] || (vals[inp.dataset.k] = {});
+    if (t === '') delete o[v]; else o[v] = Number(t);
+  });
+  saveVars(); $('msg').textContent = ''; $('describe').classList.add('hide'); pending = [];
+  const firstFilled = vars.find(v => samples.some(s => isFinite(getVal(s, v))));
+  if (!$('relX').value && firstFilled) { renderVars(); $('relX').value = firstFilled; }
+  render();
+};
+$('descSkip').onclick = () => { $('describe').classList.add('hide'); pending = []; };
+$('descVarAdd').onclick = () => {
+  const n = $('descVar').value.trim(); if (!n) return;
+  // keep what has been typed so far, then rebuild with the new column
+  $('descTable').querySelectorAll('input[data-k]').forEach(inp => { const t = inp.value.trim(); if (t !== '' && isFinite(Number(t))) { const o = vals[inp.dataset.k] || (vals[inp.dataset.k] = {}); o[vars[+inp.dataset.v]] = Number(t); } });
+  if (!vars.includes(n)) vars.push(n); $('descVar').value = ''; saveVars(); renderVars(); openDescribe(pending);
+};
+$('descVar').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); $('descVarAdd').click(); } });
 
 /* ---------- relative lithium scatter ---------- */
 let relPts = [];
