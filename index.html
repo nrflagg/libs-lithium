@@ -152,6 +152,12 @@ td .nd{color:var(--ink3)} td .fl{color:var(--warn);font-weight:600}
     </div>
     <div class="tablewrap"><table id="sumTable"></table></div>
     <p class="small" id="sumNote"></p>
+    <div class="row">
+      <label>Order <select id="relSort"><option value="load">as loaded</option><option value="desc">highest first</option><option value="name">by name</option></select></label>
+      <label><input type="checkbox" id="relLocs" checked> show each grid location</label>
+    </div>
+    <div class="plot wide"><h3 id="relHead">Relative lithium by sample</h3><canvas id="pRel" style="cursor:default"></canvas><div class="tip"></div></div>
+    <p class="small">Large markers are sample means with ± one standard deviation across grid locations; small dots are individual locations, spread sideways so they don't overlap. Hollow markers mean Li I 670.78 was not detected above noise in that sample.</p>
   </section>
 
   <section>
@@ -384,7 +390,7 @@ const LIBS = (() => {
     const locs = dataCh.map(c => ({ name: c.name, y: Float64Array.from(c.data.slice(start, start + wl.length)) }));
     const mean = new Float64Array(wl.length);
     for (const l of locs) for (let i = 0; i < wl.length; i++) mean[i] += l.y[i] / locs.length;
-    return { name: (tdms.props.name || fileName || 'sample').replace(/\.tdms$/i, ''), fileName, wl, locs, mean, settings };
+    return { name: (fileName || tdms.props.name || 'sample').replace(/\.tdms$/i, ''), fileName, wl, locs, mean, settings };
   }
 
   /* ===== Lines (air wavelengths, nm) ===== */
@@ -623,7 +629,7 @@ function metric(s) {
   const per = li.per.map((p, i) => p[key] / (norm === 'none' ? 1 : norm === 'total' ? s.A.locTotals[i] / 1e6 : s.A.lines[norm].per[i].net));
   const mu = per.reduce((a, b) => a + b, 0) / per.length;
   const sd = per.length > 1 ? Math.sqrt(per.reduce((a, b) => a + (b - mu) ** 2, 0) / (per.length - 1)) : 0;
-  return { v: li[key] / den, sd };
+  return { v: li[key] / den, sd, per };
 }
 function metricName() {
   const m = $('mMeasure').value === 'net' ? 'Li 670.78 height' : 'Li 670.78 area';
@@ -705,7 +711,7 @@ function render() {
 
   // sample selector
   $('selSample').innerHTML = samples.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join(''); if (sel) $('selSample').value = sel.id;
-  renderLines(sel); renderComp(); plots.forEach(p => p.draw());
+  renderLines(sel); renderComp(); drawRel(); plots.forEach(p => p.draw());
   $('zipBtn').disabled = $('sumBtn').disabled = !samples.length;
 }
 function verdictText(s) {
@@ -809,6 +815,101 @@ function renderComp() {
   drawScatter();
   $('compNote').textContent = 'Each element uses one line for all samples: a weaker line where it is detected in every sample that shows the element, because the brightest lines flatten out (self-absorb) when an element is abundant. Rb and Cs sit beside argon lines in an argon purge, so only their clear lines are used. ! marks a peak near the detector ceiling.';
 }
+
+/* ---------- relative lithium scatter ---------- */
+let relPts = [];
+function relRef(M) {
+  return $('mRel').value === 'max' ? Math.max(...M.map(m => m.v).filter(isFinite), 0) : (M[samples.findIndex(s => String(s.id) === $('mRel').value)] || {}).v;
+}
+function drawRel() {
+  const canvas = $('pRel'), ctx = canvas.getContext('2d'), dpr = window.devicePixelRatio || 1, W = canvas.clientWidth, H = canvas.clientHeight;
+  if (!W) return;
+  canvas.width = W * dpr; canvas.height = H * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
+  relPts = [];
+  const font = (px, wt = 400) => `${wt} ${px}px "EB Garamond", Garamond, serif`, ink2 = css('--ink2');
+  const cal = activeCal(), M = samples.map(metric), refV = relRef(M);
+  $('relHead').textContent = cal ? `Lithium by sample, ${cal.unit} (${cal.name})` : 'Relative lithium by sample, from ' + metricName().replace(/ \((counts|counts·nm)\)$/, '');
+  if (!samples.length || !(refV > 0)) {
+    ctx.font = font(15); ctx.fillStyle = ink2; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(samples.length ? 'The reference sample has no lithium signal, so nothing can be scaled to it.' : 'No files loaded yet.', W / 2, H / 2); return;
+  }
+  const conv = cal ? (v) => (v - cal.intercept) / cal.slope : (v) => v / refV * 100;
+  let rows = samples.map((s, i) => ({ s, m: M[i], v: conv(M[i].v), lo: conv(M[i].v - M[i].sd), hi: conv(M[i].v + M[i].sd), per: M[i].per.map(conv),
+    det: !!(s.A.lines.Li670 && s.A.lines.Li670.detected) }));
+  const ord = $('relSort').value;
+  if (ord === 'desc') rows.sort((a, b) => (isFinite(b.v) ? b.v : -Infinity) - (isFinite(a.v) ? a.v : -Infinity));
+  if (ord === 'name') rows.sort((a, b) => a.s.name.localeCompare(b.s.name, undefined, { numeric: true }));
+  const showLocs = $('relLocs').checked;
+  let ya = 0, yb = 0;
+  for (const r of rows) { for (const v of [r.v, r.lo, r.hi, ...(showLocs ? r.per : [])]) if (isFinite(v)) { ya = Math.min(ya, v); yb = Math.max(yb, v); } }
+  if (!(yb > ya)) yb = ya + 1;
+  yb += (yb - ya) * 0.08; if (ya < 0) ya -= (yb - ya) * 0.04;
+  // x labels: shortened names, angled when crowded
+  ctx.font = font(13.5);
+  const P = { l: 72, r: 16, t: 12 }, slot = (W - P.l - P.r) / rows.length;
+  const fullW = Math.max(...rows.map(r => ctx.measureText(r.s.name).width)), angled = fullW > slot - 8;
+  const short = (n) => angled && n.length > 40 ? n.slice(0, 18) + '…' + n.slice(-18) : n;
+  const labels = rows.map(r => short(r.s.name)), lw = Math.max(...labels.map(t => ctx.measureText(t).width));
+  P.b = angled ? Math.min(150, lw * 0.6 + 30) : 34;
+  const X = (i) => P.l + slot * (i + 0.5), Y = (v) => H - P.b - (v - ya) / (yb - ya) * (H - P.t - P.b);
+  const step = (span, n) => { const r = span / n, p = 10 ** Math.floor(Math.log10(r)), m = r / p; return (m < 1.5 ? 1 : m < 3.5 ? 2 : m < 7.5 ? 5 : 10) * p; };
+  const sy = step(yb - ya, 5);
+  ctx.fillStyle = ink2; ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.lineWidth = 1;
+  for (let v = Math.ceil(ya / sy) * sy; v <= yb; v += sy) {
+    ctx.strokeStyle = Math.abs(v) < sy / 1e6 ? css('--rule') : css('--rule2'); ctx.beginPath(); ctx.moveTo(P.l, Y(v)); ctx.lineTo(W - P.r, Y(v)); ctx.stroke();
+    ctx.fillText(sig(v, 4) + (cal ? '' : '%'), P.l - 6, Y(v));
+  }
+  if (!cal && 100 <= yb) { ctx.strokeStyle = css('--ink3'); ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.moveTo(P.l, Y(100)); ctx.lineTo(W - P.r, Y(100)); ctx.stroke(); ctx.setLineDash([]); }
+  ctx.strokeStyle = css('--rule'); ctx.beginPath(); ctx.moveTo(P.l, P.t); ctx.lineTo(P.l, H - P.b); ctx.lineTo(W - P.r, H - P.b); ctx.stroke();
+  ctx.save(); ctx.translate(11, (P.t + H - P.b) / 2); ctx.rotate(-Math.PI / 2); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(cal ? 'Li, ' + cal.unit : 'Li relative to reference, %', 0, 0); ctx.restore();
+  rows.forEach((r, i) => {
+    ctx.fillStyle = ink2; ctx.font = font(13.5);
+    if (angled) { ctx.save(); ctx.translate(X(i), H - P.b + 8); ctx.rotate(-Math.PI / 5); ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText(labels[i], 0, 0); ctx.restore(); }
+    else { ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(labels[i], X(i), H - P.b + 6); }
+  });
+  const half = Math.min(slot * 0.3, 40);
+  rows.forEach((r, i) => {
+    const col = css('--s' + r.s.slot), x = X(i);
+    if (showLocs) {
+      ctx.fillStyle = col; ctx.globalAlpha = 0.5;
+      r.per.forEach((v, k) => {
+        if (!isFinite(v)) return;
+        const jx = x + (r.per.length > 1 ? (((k * 0.618034) % 1) - 0.5) * 2 * half : 0);
+        ctx.beginPath(); ctx.arc(jx, Y(v), 3.2, 0, 6.3); ctx.fill();
+        relPts.push({ px: jx, py: Y(v), r, sub: r.s.S.locs[k].name, v, col });
+      });
+      ctx.globalAlpha = 1;
+    }
+  });
+  rows.forEach((r, i) => {
+    if (!isFinite(r.v)) return;
+    const col = css('--s' + r.s.slot), x = X(i), y = Y(r.v);
+    if (r.m.sd > 0) { ctx.strokeStyle = css('--ink'); ctx.lineWidth = 1.3; ctx.beginPath(); ctx.moveTo(x, Y(r.lo)); ctx.lineTo(x, Y(r.hi)); ctx.moveTo(x - 5, Y(r.lo)); ctx.lineTo(x + 5, Y(r.lo)); ctx.moveTo(x - 5, Y(r.hi)); ctx.lineTo(x + 5, Y(r.hi)); ctx.stroke(); }
+    ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, 7, 0, 6.3);
+    if (r.det) { ctx.fillStyle = col; ctx.fill(); ctx.strokeStyle = css('--panel'); ctx.stroke(); }
+    else { ctx.fillStyle = css('--panel'); ctx.fill(); ctx.strokeStyle = col; ctx.lineWidth = 2.2; ctx.stroke(); }
+    relPts.push({ px: x, py: y, r, sub: 'mean of ' + r.per.length + ' locations' + (r.det ? '' : ' (Li not detected)'), v: r.v, col, big: true });
+  });
+}
+(() => {
+  const canvas = $('pRel'), tip = canvas.parentElement.querySelector('.tip');
+  canvas.addEventListener('pointermove', (e) => {
+    const rc = canvas.getBoundingClientRect(), px = e.clientX - rc.left, py = e.clientY - rc.top; let best = null, bd = 14 * 14;
+    for (const q of relPts) { const d = (q.px - px) ** 2 + (q.py - py) ** 2; if (d < bd || (q.big && best && !best.big && d < 14 * 14)) { best = q; bd = d; } }
+    if (!best) { tip.style.display = 'none'; return; }
+    const cal = activeCal(), unit = cal ? ' ' + cal.unit : '%';
+    tip.innerHTML = `<div><span class="chip" style="background:${best.col}"></span><strong>${esc(best.r.s.name)}</strong></div><div>${esc(best.sub)}</div><div>${sig(best.v, 3)}${esc(unit)}${best.big && best.r.m.sd > 0 ? ' ± ' + sig(best.r.hi - best.r.v, 2) + esc(unit) : ''}</div>`;
+    tip.style.display = 'block';
+    const tw = tip.offsetWidth; tip.style.left = (canvas.offsetLeft + (best.px + 14 + tw > rc.width ? best.px - tw - 12 : best.px + 14)) + 'px'; tip.style.top = (canvas.offsetTop + Math.max(0, best.py - 20)) + 'px';
+  });
+  canvas.addEventListener('pointerleave', () => { tip.style.display = 'none'; });
+  $('relSort').onchange = $('relLocs').onchange = drawRel;
+  window.addEventListener('resize', drawRel);
+  new MutationObserver(drawRel).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', drawRel);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(drawRel);
+})();
 
 /* ---------- lithium against another element ---------- */
 let scPts = [];
