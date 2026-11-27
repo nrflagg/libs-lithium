@@ -13,6 +13,8 @@ What it does:
 - Lets you give each sample values for experimental variables (time, pH, salinity, depth, or any other), typed in or loaded from a CSV, and plot lithium against any of them.
 - Checks the 610.3 nm feature for calcium (Ca I 610.27 overlaps Li I 610.36) using Ca I 612.22.
 - Flags peaks near the detector ceiling and flat-topped peaks.
+- Maps the LIBS spots in stage coordinates over microscope images and micro-XRF maps. Images are registered either by pixel size and corner position or by clicking points of known stage position; spot positions come from the file when it records them, or from a grid you describe (columns, spacing, row-by-row or back-and-forth). Spots are coloured by lithium, a companion element, or a ratio, and can be compared with the micro-XRF value under each spot.
+- Micro-XRF maps: a CSV/TXT table of numbers (one map row per line) or a greyscale PNG/JPEG.
 - Tracks companion elements chosen from a periodic table, and plots lithium against any of them.
 
 Notes:

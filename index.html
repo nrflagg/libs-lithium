@@ -120,6 +120,12 @@ td .nd{color:var(--ink3)} td .fl{color:var(--warn);font-weight:600}
 #descTable input{width:7em;text-align:right;font-variant-numeric:tabular-nums}
 #descTable input.bad{border-color:var(--bad)}
 #descTable tr.all td{background:var(--rule2)}
+.plot.map canvas{height:520px;cursor:grab;touch-action:none}
+.maplegend{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}
+.bar-grad{display:inline-block;width:120px;height:10px;border-radius:2px;border:1px solid var(--rule)}
+.regwrap{overflow:auto;max-height:440px}
+#regCanvas{display:block;cursor:crosshair}
+#regPtTable input{width:7em;text-align:right}
 .hide{display:none!important}
 </style>
 </head>
@@ -221,6 +227,67 @@ td .nd{color:var(--ink3)} td .fl{color:var(--warn);font-weight:600}
     </div>
     <div class="plot wide"><h3 id="scHead">Lithium against another element</h3><canvas id="pSc" style="cursor:default"></canvas><div class="tip"></div></div>
     <p class="small">Large markers are sample means with ± one standard deviation across grid locations; small dots are individual locations. Both axes are peak heights above baseline, in counts.</p>
+  </section>
+
+  <section>
+    <h2>Where is the lithium within a sample?</h2>
+    <p class="small">Lay the LIBS spots over microscope images and micro-XRF maps, all placed in stage coordinates (mm). Add an image, register it to the stage, and, if a file doesn't record where each grid location was, describe its grid below. Images stay on your computer like everything else.</p>
+    <div class="row">
+      <button id="mapAddImg">Add microscope image…</button><input type="file" id="mapImgFile" accept="image/png,image/jpeg,image/webp" multiple class="hide">
+      <button id="mapAddXrf">Add micro-XRF map…</button><input type="file" id="mapXrfFile" accept=".csv,.txt,.tsv,image/png,image/jpeg" multiple class="hide">
+      <label>Colour spots by <select id="mapVal"></select></label>
+      <label>Spot diameter <input type="number" id="mapSpot" value="100" min="1" step="5"> µm</label>
+    </div>
+    <div class="row">
+      <label>Image opacity <input type="range" id="mapOp" min="0" max="100" value="100"></label>
+      <label><input type="checkbox" id="mapYup"> stage Y increases upward on screen</label>
+      <button class="mini" id="mapFit">Fit view</button><button class="mini" id="mapIn" aria-label="Zoom in">+</button><button class="mini" id="mapOut" aria-label="Zoom out">−</button>
+      <button class="mini" id="mapCsv">Download spot table (.csv)</button>
+    </div>
+    <div class="tablewrap"><table id="layerTable"></table></div>
+
+    <div id="regBox" class="describe hide" role="region" aria-labelledby="regHead">
+      <h3 id="regHead">Register image</h3>
+      <div class="row" role="radiogroup" aria-label="How to register">
+        <label><input type="radio" name="regMode" value="scale"> Pixel size and corner position</label>
+        <label><input type="radio" name="regMode" value="points"> Click points whose stage position I know</label>
+      </div>
+      <div class="row">
+        <label>On the image, stage Y <select id="rgDir"><option value="down">increases downward</option><option value="up">increases upward</option></select></label>
+      </div>
+      <div id="regScale" class="row">
+        <label>Pixel size <input type="number" id="rgUm" step="any" min="0"> µm</label>
+        <label>Top-left corner X <input type="number" id="rgX0" step="any"> mm</label>
+        <label>Y <input type="number" id="rgY0" step="any"> mm</label>
+        <label>Rotation <input type="number" id="rgRot" step="any" value="0"> °</label>
+      </div>
+      <div id="regPoints" class="describe-exp">
+        <p class="small">Click a feature on the image whose stage position you know (a laser crater, a grid corner, a fiducial mark) and type its stage X and Y. Two points fix position, scale and rotation; three or more also correct for skew and report how well they agree.</p>
+        <div class="regwrap"><canvas id="regCanvas"></canvas></div>
+        <div class="tablewrap"><table id="regPtTable"></table></div>
+      </div>
+      <p class="small" id="regFit"></p>
+      <div class="row"><button class="primary" id="regDone">Done</button></div>
+    </div>
+
+    <details id="posBox">
+      <summary>Where each file's grid locations are</summary>
+      <p class="small" id="posNote"></p>
+      <div class="tablewrap"><table id="posTable"></table></div>
+    </details>
+
+    <div class="plot wide map"><h3 id="mapHead">Map</h3><canvas id="pMap"></canvas><div class="tip"></div>
+      <div class="row small"><span id="mapLegend" class="maplegend"></span><span id="mapCoord"></span></div>
+    </div>
+    <p class="small">Drag to pan, scroll to zoom, double-click to fit. Hollow circles are locations where the chosen line was not detected above noise.</p>
+
+    <div id="cmpBox" class="hide" style="display:flex;flex-direction:column;gap:12px">
+      <div class="row">
+        <label>Compare spots with micro-XRF map <select id="cmpLayer"></select></label>
+      </div>
+      <div class="plot wide"><h3 id="cmpHead">LIBS against micro-XRF</h3><canvas id="pCmp" style="cursor:default"></canvas><div class="tip"></div></div>
+      <p class="small" id="cmpNote">Each point is one LIBS location. Its micro-XRF value is the average of the map pixels inside that spot's footprint.</p>
+    </div>
   </section>
 
   <section>
@@ -653,7 +720,7 @@ async function addFiles(all) {
   }
   if (!selected && samples.length) selected = samples[0].id;
   if (errs.length) $('msg').textContent = errs.join('  ');
-  render();
+  render(); if (added.length) MAP.refit();
   // Ask for sample values unless a CSV in the same drop already covered every new file.
   const covered = csvs.length && added.every(s => vals[keyOf(s.name)] && Object.keys(vals[keyOf(s.name)]).length);
   if (added.length && !covered) openDescribe(added);
@@ -756,7 +823,7 @@ function render() {
 
   // sample selector
   $('selSample').innerHTML = samples.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join(''); if (sel) $('selSample').value = sel.id;
-  renderLines(sel); renderComp(); renderVars(); drawRel(); plots.forEach(p => p.draw());
+  renderLines(sel); renderComp(); renderVars(); drawRel(); MAP.refresh(); plots.forEach(p => p.draw());
   $('zipBtn').disabled = $('sumBtn').disabled = !samples.length;
 }
 function verdictText(s) {
@@ -816,7 +883,7 @@ const K_S = new Set('Li Na K Rb Cs Be Mg Ca Sr Ba Al Ti Cr Mn Fe Cu'.split(' '))
 const PICKABLE = new Set(LIBS.LINES.filter(L => L.pref && L.el !== 'Li').map(L => L.el));
 let tracked = ['Na', 'K', 'Rb', 'Mg', 'Ca', 'Sr'];
 try { const t = JSON.parse(localStorage.getItem('libs-companions') || 'null'); if (Array.isArray(t)) tracked = t.filter(e => PICKABLE.has(e)); } catch (e) {}
-function setTracked(t) { tracked = t; try { localStorage.setItem('libs-companions', JSON.stringify(t)); } catch (e) {} drawPT(); renderComp(); }
+function setTracked(t) { tracked = t; try { localStorage.setItem('libs-companions', JSON.stringify(t)); } catch (e) {} drawPT(); renderComp(); MAP.refresh(); }
 function drawPT() {
   $('ptable').innerHTML = PT.map(([s, r, c]) => {
     const k = K_S.has(s) ? 'k-s' : K_W.has(s) ? 'k-w' : K_X.has(s) ? 'k-x' : 'k-n', st = `style="grid-row:${r};grid-column:${c}"`;
@@ -1185,6 +1252,421 @@ function drawScatter() {
   window.addEventListener('resize', drawScatter);
   new MutationObserver(drawScatter).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', drawScatter);
+})();
+
+/* ---------- map: images, micro-XRF and spot positions ---------- */
+const MAP = (() => {
+  const store = (k, d) => { try { const v = JSON.parse(localStorage.getItem(k) || 'null'); return v == null ? d : v; } catch (e) { return d; } };
+  const keep = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
+  const layers = [];                       // {id, name, kind:'image'|'xrf', src (drawable), w, h, grid, lo, hi, reg, M, show}
+  const regs = store('libs-map-regs', {}); // registration by layer name
+  const pos = store('libs-map-pos', {});   // spot-position settings by sample key
+  let nextL = 1, editing = null, view = null, spotsCache = [], hits = [];
+  $('mapSpot').value = store('libs-map-spot', 100);
+  const SPOT_RAMP_L = ['#e3eefa', '#a9cbef', '#6aa3e3', '#2a78d6', '#1b4f8f'], SPOT_RAMP_D = ['#1b3354', '#24518a', '#2f73c4', '#5a9be6', '#b9d6f4'];
+  const XRF_RAMP = ['#120c08', '#4a2410', '#93441c', '#d9752f', '#ffd8a8'];
+  const hex = (h) => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+  function ramp(stops, t) {
+    t = Math.max(0, Math.min(1, t)); const x = t * (stops.length - 1), i = Math.min(stops.length - 2, Math.floor(x)), f = x - i;
+    const a = hex(stops[i]), b = hex(stops[i + 1]); return a.map((v, k) => Math.round(v + (b[k] - v) * f));
+  }
+  const dark = () => { const d = document.documentElement.dataset.theme; return d ? d === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches; };
+  const spotRamp = () => dark() ? SPOT_RAMP_D : SPOT_RAMP_L;
+
+  /* ----- registration maths: pixel (px, py) -> stage (X, Y) in mm ----- */
+  function computeM(r) {
+    const sy = r.dir === 'up' ? -1 : 1;
+    if (r.mode === 'scale') {
+      if (!(r.um > 0) || !isFinite(r.x0) || !isFinite(r.y0)) return null;
+      const s = r.um / 1000, t = (r.rot || 0) * Math.PI / 180, c = Math.cos(t), n = Math.sin(t);
+      return { a: s * c, b: -s * n * sy, c: r.x0, d: s * n, e: s * c * sy, f: r.y0 };
+    }
+    const P = (r.pts || []).filter(p => isFinite(p.X) && isFinite(p.Y));
+    if (P.length < 2) return null;
+    if (P.length === 2) {   // similarity: position, scale, rotation
+      const [p1, p2] = P, z1 = [p1.px, sy * p1.py], dz = [p2.px - p1.px, sy * (p2.py - p1.py)], dZ = [p2.X - p1.X, p2.Y - p1.Y], den = dz[0] ** 2 + dz[1] ** 2;
+      if (!den) return null;
+      const Ar = (dZ[0] * dz[0] + dZ[1] * dz[1]) / den, Ai = (dZ[1] * dz[0] - dZ[0] * dz[1]) / den;
+      return { a: Ar, b: -Ai * sy, c: p1.X - (Ar * z1[0] - Ai * z1[1]), d: Ai, e: Ar * sy, f: p1.Y - (Ai * z1[0] + Ar * z1[1]) };
+    }
+    const N = [[0, 0, 0], [0, 0, 0], [0, 0, 0]], bx = [0, 0, 0], by = [0, 0, 0];   // least-squares affine
+    for (const p of P) { const row = [p.px, p.py, 1]; for (let i = 0; i < 3; i++) { bx[i] += row[i] * p.X; by[i] += row[i] * p.Y; for (let j = 0; j < 3; j++) N[i][j] += row[i] * row[j]; } }
+    const sx = solve3(N, bx), syv = solve3(N, by); if (!sx || !syv) return null;
+    return { a: sx[0], b: sx[1], c: sx[2], d: syv[0], e: syv[1], f: syv[2] };
+  }
+  function solve3(A, b) {
+    const m = A.map((r, i) => [...r, b[i]]);
+    for (let c = 0; c < 3; c++) {
+      let p = c; for (let r = c + 1; r < 3; r++) if (Math.abs(m[r][c]) > Math.abs(m[p][c])) p = r;
+      if (Math.abs(m[p][c]) < 1e-12) return null; [m[c], m[p]] = [m[p], m[c]];
+      for (let r = 0; r < 3; r++) if (r !== c) { const f = m[r][c] / m[c][c]; for (let k = c; k < 4; k++) m[r][k] -= f * m[c][k]; }
+    }
+    return [m[0][3] / m[0][0], m[1][3] / m[1][1], m[2][3] / m[2][2]];
+  }
+  const fwd = (M, px, py) => [M.a * px + M.b * py + M.c, M.d * px + M.e * py + M.f];
+  function inv(M, X, Y) { const det = M.a * M.e - M.b * M.d; return [(M.e * (X - M.c) - M.b * (Y - M.f)) / det, (-M.d * (X - M.c) + M.a * (Y - M.f)) / det]; }
+  function residual(r, M) {
+    const P = (r.pts || []).filter(p => isFinite(p.X) && isFinite(p.Y)); if (!M || P.length < 3) return NaN;
+    return Math.sqrt(P.reduce((s, p) => { const [X, Y] = fwd(M, p.px, p.py); return s + (X - p.X) ** 2 + (Y - p.Y) ** 2; }, 0) / P.length) * 1000;
+  }
+  function describeReg(L) {
+    if (!L.M) return 'not registered';
+    const px = Math.sqrt(Math.abs(L.M.a * L.M.e - L.M.b * L.M.d)) * 1000;
+    if (L.reg.mode === 'scale') return `${sig(px, 3)} µm per pixel, corner at ${sig(L.reg.x0, 6)}, ${sig(L.reg.y0, 6)} mm`;
+    const n = L.reg.pts.filter(p => isFinite(p.X) && isFinite(p.Y)).length, res = residual(L.reg, L.M);
+    return `${n} points, ${sig(px, 3)} µm per pixel` + (isFinite(res) ? `, points agree to ${sig(res, 2)} µm` : '');
+  }
+
+  /* ----- loading layers ----- */
+  function defaultReg(name) {
+    return Object.assign({ mode: 'scale', dir: 'down', um: NaN, x0: NaN, y0: NaN, rot: 0, pts: [] }, regs[name] || {});
+  }
+  function addLayer(o) {
+    const L = Object.assign({ id: nextL++, show: true }, o); L.reg = defaultReg(L.name); L.M = computeM(L.reg); layers.push(L);
+    renderLayers(); if (!L.M) openReg(L.id); else fit(); draw();
+  }
+  async function loadImage(f, kind) {
+    const url = URL.createObjectURL(f), img = new Image();
+    await new Promise((ok, bad) => { img.onload = ok; img.onerror = () => bad(new Error('the browser cannot open this image type (use PNG or JPEG)')); img.src = url; });
+    const o = { name: f.name, kind, src: img, w: img.naturalWidth, h: img.naturalHeight };
+    if (kind === 'xrf') {   // grey levels become relative intensities
+      const c = document.createElement('canvas'); c.width = o.w; c.height = o.h; const x = c.getContext('2d'); x.drawImage(img, 0, 0);
+      const d = x.getImageData(0, 0, o.w, o.h).data, g = new Float32Array(o.w * o.h);
+      for (let i = 0; i < g.length; i++) g[i] = 0.299 * d[4 * i] + 0.587 * d[4 * i + 1] + 0.114 * d[4 * i + 2];
+      o.grid = g; o.unit = 'grey level'; finishGrid(o, false);
+    }
+    addLayer(o);
+  }
+  function parseMatrix(text) {
+    const rows = [];
+    for (const line of text.replace(/^﻿/, '').split(/\r?\n/)) {
+      const t = line.trim(); if (!t) continue;
+      const parts = t.split(/[,;\t ]+/); const nums = parts.map(Number);
+      if (nums.every(isFinite)) rows.push(nums);
+      else if (rows.length) break;   // stop at trailing text; skip header lines before the matrix
+    }
+    if (!rows.length) return null;
+    const counts = {}; rows.forEach(r => counts[r.length] = (counts[r.length] || 0) + 1);
+    const w = +Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0], use = rows.filter(r => r.length === w);
+    if (w < 2 || use.length < 2) return null;
+    const g = new Float32Array(w * use.length); use.forEach((r, j) => r.forEach((v, i) => g[j * w + i] = v));
+    return { w, h: use.length, grid: g };
+  }
+  function finishGrid(o, paint = true) {
+    const v = Array.from(o.grid).filter(isFinite).sort((a, b) => a - b), q = (p) => v[Math.min(v.length - 1, Math.floor(p * (v.length - 1)))];
+    o.lo = q(0.01); o.hi = q(0.99); if (!(o.hi > o.lo)) o.hi = o.lo + 1;
+    if (paint) paintGrid(o);
+  }
+  function paintGrid(o) {
+    const c = document.createElement('canvas'); c.width = o.w; c.height = o.h; const x = c.getContext('2d'), im = x.createImageData(o.w, o.h);
+    for (let i = 0; i < o.grid.length; i++) { const [r, g, b] = ramp(XRF_RAMP, (o.grid[i] - o.lo) / (o.hi - o.lo)); im.data.set([r, g, b, 255], 4 * i); }
+    x.putImageData(im, 0, 0); o.src = c;
+  }
+  async function loadXrf(f) {
+    if (/\.(png|jpe?g)$/i.test(f.name)) return loadImage(f, 'xrf');
+    const m = parseMatrix(await f.text());
+    if (!m) throw new Error('expected a table of numbers, one map row per line');
+    const o = Object.assign({ name: f.name, kind: 'xrf', unit: 'counts' }, m); finishGrid(o); addLayer(o);
+  }
+  async function addFilesOf(input, kind) {
+    const errs = [];
+    for (const f of input.files) { try { kind === 'xrf' ? await loadXrf(f) : await loadImage(f, 'image'); } catch (e) { errs.push(f.name + ': ' + e.message); } }
+    input.value = ''; $('msg').textContent = errs.join('  ');
+  }
+  $('mapAddImg').onclick = () => $('mapImgFile').click(); $('mapImgFile').onchange = (e) => addFilesOf(e.target, 'image');
+  $('mapAddXrf').onclick = () => $('mapXrfFile').click(); $('mapXrfFile').onchange = (e) => addFilesOf(e.target, 'xrf');
+
+  /* ----- layer list ----- */
+  function renderLayers() {
+    if (!layers.length) { $('layerTable').innerHTML = '<tbody><tr><td class="l">No images yet. Spots are drawn on their own until you add one.</td></tr></tbody>'; }
+    else $('layerTable').innerHTML = `<thead><tr><th class="l">Layer</th><th class="l">Kind</th><th>Pixels</th><th class="l">Registration</th><th class="l">Show</th><th></th></tr></thead><tbody>` +
+      layers.map(L => `<tr><td class="l nm">${esc(L.name)}</td><td class="l">${L.kind === 'xrf' ? 'micro-XRF' + (L.unit === 'grey level' ? ' (image grey levels)' : '') : 'microscope'}</td><td>${L.w} × ${L.h}</td>
+        <td class="l">${L.M ? esc(describeReg(L)) : pill('warn', '!', 'not registered')}</td><td class="l"><input type="checkbox" data-show="${L.id}" ${L.show ? 'checked' : ''} aria-label="Show ${esc(L.name)}"></td>
+        <td><button class="mini" data-reg="${L.id}">Register…</button> <button class="mini" data-lrm="${L.id}">remove</button></td></tr>`).join('') + '</tbody>';
+    const x = layers.filter(L => L.kind === 'xrf'), prev = $('cmpLayer').value;
+    $('cmpBox').classList.toggle('hide', !x.length);
+    $('cmpLayer').innerHTML = x.map(L => `<option value="${L.id}">${esc(L.name)}</option>`).join('');
+    if (x.some(L => String(L.id) === prev)) $('cmpLayer').value = prev;
+  }
+  $('layerTable').addEventListener('click', (e) => {
+    const r = e.target.closest('[data-reg]'), rm = e.target.closest('[data-lrm]');
+    if (r) openReg(+r.dataset.reg);
+    if (rm) { const i = layers.findIndex(L => L.id === +rm.dataset.lrm); if (layers[i].id === editing) closeReg(); layers.splice(i, 1); renderLayers(); draw(); }
+  });
+  $('layerTable').addEventListener('change', (e) => { const c = e.target.closest('[data-show]'); if (c) { layers.find(L => L.id === +c.dataset.show).show = c.checked; draw(); } });
+
+  /* ----- registration panel ----- */
+  const cur = () => layers.find(L => L.id === editing);
+  function openReg(id) {
+    editing = id; const L = cur(), r = L.reg;
+    $('regHead').textContent = 'Register ' + L.name;
+    document.querySelectorAll('input[name="regMode"]').forEach(x => { x.checked = x.value === r.mode; });
+    $('rgDir').value = r.dir; $('rgUm').value = isFinite(r.um) ? r.um : ''; $('rgX0').value = isFinite(r.x0) ? r.x0 : ''; $('rgY0').value = isFinite(r.y0) ? r.y0 : ''; $('rgRot').value = r.rot || 0;
+    $('regBox').classList.remove('hide'); showMode(); $('regBox').scrollIntoView({ block: 'nearest' });
+  }
+  function closeReg() { editing = null; $('regBox').classList.add('hide'); }
+  function showMode() {
+    const L = cur(); if (!L) return; const pts = L.reg.mode === 'points';
+    $('regScale').classList.toggle('hide', pts); $('regPoints').classList.toggle('hide', !pts);
+    if (pts) { drawRegCanvas(); renderPts(); }
+    updateReg();
+  }
+  function updateReg() {
+    const L = cur(); if (!L) return; L.M = computeM(L.reg);
+    regs[L.name] = { mode: L.reg.mode, dir: L.reg.dir, um: L.reg.um, x0: L.reg.x0, y0: L.reg.y0, rot: L.reg.rot, pts: L.reg.pts }; keep('libs-map-regs', regs);
+    $('regFit').textContent = L.M ? 'Registered: ' + describeReg(L) + '.' : (L.reg.mode === 'scale' ? 'Enter the pixel size and the stage position of the top-left corner.' : 'Add at least two points with stage X and Y.');
+    renderLayers(); draw();
+  }
+  document.querySelectorAll('input[name="regMode"]').forEach(x => x.addEventListener('change', () => { cur().reg.mode = x.value; showMode(); }));
+  $('rgDir').onchange = () => { cur().reg.dir = $('rgDir').value; updateReg(); };
+  [['rgUm', 'um'], ['rgX0', 'x0'], ['rgY0', 'y0'], ['rgRot', 'rot']].forEach(([id, k]) => $(id).addEventListener('input', () => { const t = $(id).value.trim(); cur().reg[k] = t === '' ? NaN : Number(t); updateReg(); }));
+  $('regDone').onclick = () => { const had = cur() && cur().M; closeReg(); if (had) fit(); draw(); };
+  let regScale = 1;
+  function drawRegCanvas() {
+    const L = cur(), c = $('regCanvas'), W = c.parentElement.clientWidth || 600; regScale = Math.min(W / L.w, 420 / L.h, 4);
+    const dpr = window.devicePixelRatio || 1; c.style.width = L.w * regScale + 'px'; c.style.height = L.h * regScale + 'px';
+    c.width = L.w * regScale * dpr; c.height = L.h * regScale * dpr; const x = c.getContext('2d'); x.setTransform(dpr, 0, 0, dpr, 0, 0);
+    x.imageSmoothingEnabled = L.kind !== 'xrf' || L.unit === 'grey level'; x.drawImage(L.src, 0, 0, L.w * regScale, L.h * regScale);
+    L.reg.pts.forEach((p, i) => {
+      const X = p.px * regScale, Y = p.py * regScale; x.strokeStyle = '#fff'; x.lineWidth = 3; x.beginPath(); x.arc(X, Y, 7, 0, 6.3); x.stroke();
+      x.strokeStyle = '#d03b3b'; x.lineWidth = 2; x.beginPath(); x.arc(X, Y, 7, 0, 6.3); x.moveTo(X - 11, Y); x.lineTo(X + 11, Y); x.moveTo(X, Y - 11); x.lineTo(X, Y + 11); x.stroke();
+      x.font = '600 14px "EB Garamond", Garamond, serif'; x.lineWidth = 3; x.strokeStyle = '#fff'; x.strokeText(String(i + 1), X + 9, Y - 9); x.fillStyle = '#d03b3b'; x.fillText(String(i + 1), X + 9, Y - 9);
+    });
+  }
+  $('regCanvas').addEventListener('click', (e) => {
+    const L = cur(); if (!L) return; const r = e.currentTarget.getBoundingClientRect();
+    L.reg.pts.push({ px: (e.clientX - r.left) / regScale, py: (e.clientY - r.top) / regScale, X: NaN, Y: NaN });
+    drawRegCanvas(); renderPts(); updateReg();
+    const ins = $('regPtTable').querySelectorAll('input[data-pk="X"]'); if (ins.length) ins[ins.length - 1].focus();
+  });
+  function renderPts() {
+    const L = cur();
+    $('regPtTable').innerHTML = L.reg.pts.length ? `<thead><tr><th class="l">Point</th><th>Image x, y (pixels)</th><th>Stage X (mm)</th><th>Stage Y (mm)</th><th></th></tr></thead><tbody>` +
+      L.reg.pts.map((p, i) => `<tr><td class="l">${i + 1}</td><td>${p.px.toFixed(1)}, ${p.py.toFixed(1)}</td>
+        <td><input type="text" inputmode="decimal" data-pi="${i}" data-pk="X" value="${isFinite(p.X) ? p.X : ''}" aria-label="Stage X of point ${i + 1}"></td>
+        <td><input type="text" inputmode="decimal" data-pi="${i}" data-pk="Y" value="${isFinite(p.Y) ? p.Y : ''}" aria-label="Stage Y of point ${i + 1}"></td>
+        <td><button class="mini" data-prm="${i}">remove</button></td></tr>`).join('') + '</tbody>' : '<tbody><tr><td class="l">Click on the image to add the first point.</td></tr></tbody>';
+  }
+  $('regPtTable').addEventListener('input', (e) => { const i = e.target.dataset.pi; if (i === undefined) return; const t = e.target.value.trim(); cur().reg.pts[+i][e.target.dataset.pk] = t === '' ? NaN : Number(t); updateReg(); });
+  $('regPtTable').addEventListener('click', (e) => { const b = e.target.closest('[data-prm]'); if (!b) return; cur().reg.pts.splice(+b.dataset.prm, 1); drawRegCanvas(); renderPts(); updateReg(); });
+
+  /* ----- spot positions ----- */
+  const setting = (s, n) => s.S.settings.find(x => x.name === n);
+  function filePos(s) {
+    const X = setting(s, 'X Position'), Y = setting(s, 'Y Position');
+    return { xs: X ? X.values : [], ys: Y ? Y.values : [], varies: !!(X && Y && (X.varies || Y.varies)), x0: X ? X.value : NaN, y0: Y ? Y.value : NaN };
+  }
+  function cfg(s) {
+    const k = keyOf(s.name), fp = filePos(s);
+    if (!pos[k]) pos[k] = { mode: fp.varies ? 'file' : 'point', x0: fp.x0, y0: fp.y0, cols: s.S.locs.length, dx: 100, dy: 100, order: 'rows' };
+    return pos[k];
+  }
+  function positions(s) {
+    const c = cfg(s), fp = filePos(s), n = s.S.locs.length;
+    if (c.mode === 'file' && fp.varies) return s.S.locs.map((_, i) => [fp.xs[i], fp.ys[i]]);
+    if (c.mode === 'grid') {
+      const cols = Math.max(1, Math.round(c.cols) || 1);
+      return s.S.locs.map((_, i) => { const row = Math.floor(i / cols); let col = i % cols; if (c.order === 'snake' && row % 2) col = cols - 1 - col; return [c.x0 + col * c.dx / 1000, c.y0 + row * c.dy / 1000]; });
+    }
+    return null;   // one point at the file position
+  }
+  function renderPos() {
+    const logged = samples.some(s => { const L = setting(s, 'Log Laser Positions'); return L && L.value; });
+    const anyVar = samples.some(s => filePos(s).varies);
+    $('posNote').textContent = samples.length && !anyVar ? `None of the loaded files records a separate stage position for each grid location${logged ? '' : ' ("Log Laser Positions" is off in their acquisition settings)'}, so each file is drawn as one point at its stage position unless you describe its grid. Turning that setting on in the LIBS software for future maps would make this automatic, if it records positions in the file.` : 'Positions can come from the file when it records one per grid location, or from a grid you describe.';
+    if (!samples.length) { $('posTable').innerHTML = '<tbody><tr><td class="l">No files loaded yet.</td></tr></tbody>'; return; }
+    $('posTable').innerHTML = `<thead><tr><th class="l">Sample</th><th class="l">Locations drawn as</th><th>First spot X (mm)</th><th>First spot Y (mm)</th><th>Columns</th><th>Spacing X (µm)</th><th>Spacing Y (µm)</th><th class="l">Order</th></tr></thead><tbody>` +
+      samples.map(s => {
+        const c = cfg(s), k = esc(keyOf(s.name)), fp = filePos(s), g = c.mode === 'grid', inp = (f, v, on) => `<input type="text" inputmode="decimal" data-pos="${k}" data-f="${f}" value="${isFinite(v) ? v : ''}" ${on ? '' : 'disabled'} style="width:6em;text-align:right">`;
+        return `<tr><td class="l nm"><span class="chip" style="background:var(--s${s.slot})"></span>${esc(s.name)}</td>
+          <td class="l"><select data-pos="${k}" data-f="mode">${fp.varies ? `<option value="file"${c.mode === 'file' ? ' selected' : ''}>positions in the file</option>` : ''}<option value="point"${c.mode === 'point' ? ' selected' : ''}>one point, the sample mean</option><option value="grid"${g ? ' selected' : ''}>a grid I describe</option></select></td>
+          <td>${inp('x0', c.x0, c.mode !== 'file')}</td><td>${inp('y0', c.y0, c.mode !== 'file')}</td><td>${inp('cols', c.cols, g)}</td><td>${inp('dx', c.dx, g)}</td><td>${inp('dy', c.dy, g)}</td>
+          <td class="l"><select data-pos="${k}" data-f="order" ${g ? '' : 'disabled'}><option value="rows"${c.order === 'rows' ? ' selected' : ''}>row by row</option><option value="snake"${c.order === 'snake' ? ' selected' : ''}>back and forth</option></select></td></tr>`;
+      }).join('') + '</tbody>';
+  }
+  function onPos(e) {
+    const t = e.target; if (!t.dataset.pos) return; const c = pos[t.dataset.pos]; if (!c) return;
+    if (t.tagName === 'SELECT') c[t.dataset.f] = t.value; else { const v = t.value.trim(); c[t.dataset.f] = v === '' ? NaN : Number(v); }
+    keep('libs-map-pos', pos); if (t.tagName === 'SELECT') renderPos(); draw();
+  }
+  $('posTable').addEventListener('input', onPos); $('posTable').addEventListener('change', (e) => { if (e.target.tagName === 'SELECT') onPos(e); });
+
+  /* ----- spot values ----- */
+  function valueOptions() {
+    const o = [['li', 'Li I 670.78 height (counts)'], ['lirel', 'Li I 670.78, % of the highest spot']];
+    for (const el of PT.map(x => x[0]).filter(e => tracked.includes(e))) { const L = lineFor(el); o.push(['el:' + el, L.label + ' height (counts)'], ['ratio:' + el, 'Li I 670.78 ÷ ' + L.label]); }
+    return o;
+  }
+  function buildValSel() {
+    const prev = $('mapVal').value, o = valueOptions();
+    $('mapVal').innerHTML = o.map(([v, t]) => `<option value="${esc(v)}">${esc(t)}</option>`).join('');
+    $('mapVal').value = o.some(x => x[0] === prev) ? prev : 'li';
+  }
+  function spots() {
+    const key = $('mapVal').value || 'li', out = [], snr = opts().snrMin;
+    for (const s of samples) {
+      const li = s.A.lines.Li670; if (!li) continue;
+      let m = null; if (key.startsWith('el:') || key.startsWith('ratio:')) { m = s.A.lines[lineFor(key.split(':')[1]).id]; if (!m) continue; }
+      const per = li.per.map((p, i) => {
+        if (key === 'li' || key === 'lirel') return { v: p.net, det: p.snr >= snr };
+        if (key.startsWith('el:')) return { v: m.per[i].net, det: m.per[i].snr >= snr };
+        return { v: m.per[i].net > 0 ? p.net / m.per[i].net : NaN, det: p.snr >= snr && m.per[i].snr >= snr };
+      });
+      const P = positions(s), c = cfg(s);
+      if (P) per.forEach((q, i) => out.push({ s, i, X: P[i][0], Y: P[i][1], v: q.v, det: q.det, name: s.S.locs[i].name }));
+      else { const v = per.reduce((a, q) => a + q.v, 0) / per.length; out.push({ s, i: -1, X: c.x0, Y: c.y0, v, det: per.filter(q => q.det).length * 2 > per.length, name: 'mean of ' + per.length + ' locations' }); }
+    }
+    if (key === 'lirel') { const mx = Math.max(0, ...out.map(p => p.v).filter(isFinite)); out.forEach(p => p.v = mx > 0 ? p.v / mx * 100 : NaN); }
+    return out.filter(p => isFinite(p.X) && isFinite(p.Y));
+  }
+  const unitOf = () => ({ li: ' counts', lirel: '%' })[$('mapVal').value] || ($('mapVal').value.startsWith('el:') ? ' counts' : '');
+
+  /* ----- drawing ----- */
+  const canvas = $('pMap'), tip = canvas.parentElement.querySelector('.tip');
+  function bounds() {
+    let xa = Infinity, xb = -Infinity, ya = Infinity, yb = -Infinity; const add = (x, y) => { xa = Math.min(xa, x); xb = Math.max(xb, x); ya = Math.min(ya, y); yb = Math.max(yb, y); };
+    spotsCache.forEach(p => add(p.X, p.Y));
+    layers.filter(L => L.show && L.M).forEach(L => [[0, 0], [L.w, 0], [0, L.h], [L.w, L.h]].forEach(([u, v]) => add(...fwd(L.M, u, v))));
+    return isFinite(xa) ? { xa, xb, ya, yb } : null;
+  }
+  function fit() {
+    spotsCache = spots(); const b = bounds(), W = canvas.clientWidth || 800, H = canvas.clientHeight || 500;
+    if (!b) { view = { cx: 0, cy: 0, k: 100 }; return; }
+    const span = Math.max(b.xb - b.xa, b.yb - b.ya, 0.5);
+    view = { cx: (b.xa + b.xb) / 2, cy: (b.ya + b.yb) / 2, k: Math.min((W - 40) / Math.max(b.xb - b.xa, span * 0.2), (H - 40) / Math.max(b.yb - b.ya, span * 0.2)) };
+  }
+  const ys = () => $('mapYup').checked ? -1 : 1;
+  const toS = (X, Y, W, H) => [W / 2 + (X - view.cx) * view.k, H / 2 + ys() * (Y - view.cy) * view.k];
+  const toStage = (x, y, W, H) => [view.cx + (x - W / 2) / view.k, view.cy + ys() * (y - H / 2) / view.k];
+  function draw() {
+    const dpr = window.devicePixelRatio || 1, W = canvas.clientWidth, H = canvas.clientHeight; if (!W) return;
+    canvas.width = W * dpr; canvas.height = H * dpr; const ctx = canvas.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
+    spotsCache = spots(); if (!view) fit();
+    ctx.fillStyle = css('--rule2'); ctx.fillRect(0, 0, W, H);
+    for (const L of layers) if (L.show && L.M) {
+      const M = L.M, k = view.k, s = ys();
+      ctx.save(); ctx.globalAlpha = $('mapOp').value / 100; ctx.imageSmoothingEnabled = L.kind !== 'xrf' || L.unit === 'grey level';
+      ctx.setTransform(dpr * k * M.a, dpr * s * k * M.d, dpr * k * M.b, dpr * s * k * M.e, dpr * (W / 2 + k * (M.c - view.cx)), dpr * (H / 2 + s * k * (M.f - view.cy)));
+      ctx.drawImage(L.src, 0, 0); ctx.restore();
+    }
+    // spots
+    const vals = spotsCache.filter(p => p.det && isFinite(p.v)).map(p => p.v), lo = vals.length ? Math.min(...vals) : 0, hi = vals.length ? Math.max(...vals) : 1, R = spotRamp();
+    const r = Math.max(4, ($('mapSpot').value || 100) / 2000 * view.k); hits = [];
+    for (const p of spotsCache) {
+      const [x, y] = toS(p.X, p.Y, W, H); if (x < -r || y < -r || x > W + r || y > H + r) continue;
+      ctx.beginPath(); ctx.arc(x, y, r, 0, 6.3);
+      if (p.det && isFinite(p.v)) { const [a, b, c] = ramp(R, hi > lo ? (p.v - lo) / (hi - lo) : 1); ctx.fillStyle = `rgb(${a},${b},${c})`; ctx.fill(); ctx.strokeStyle = css('--panel'); ctx.lineWidth = 1.5; ctx.stroke(); }
+      else { ctx.strokeStyle = css('--ink2'); ctx.lineWidth = 1.5; ctx.stroke(); }
+      if (p.i === -1) { ctx.strokeStyle = css('--ink'); ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x, y, r + 3, 0, 6.3); ctx.stroke(); }
+      hits.push({ x, y, r, p });
+    }
+    // scale bar
+    const target = (W * 0.18) / view.k, p10 = 10 ** Math.floor(Math.log10(target)), m = target / p10, len = (m < 2 ? 1 : m < 5 ? 2 : 5) * p10, px = len * view.k;
+    ctx.fillStyle = css('--panel'); ctx.globalAlpha = 0.85; ctx.fillRect(10, H - 38, px + 20, 28); ctx.globalAlpha = 1;
+    ctx.fillStyle = css('--ink'); ctx.fillRect(20, H - 18, px, 3);
+    ctx.font = '400 13.5px "EB Garamond", Garamond, serif'; ctx.textBaseline = 'bottom'; ctx.textAlign = 'left';
+    ctx.fillText(len >= 1 ? `${sig(len, 3)} mm` : `${sig(len * 1000, 3)} µm`, 20, H - 21);
+    if (!spotsCache.length && !layers.length) { ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = css('--ink2'); ctx.font = '400 15px "EB Garamond", Garamond, serif'; ctx.fillText('No files loaded yet.', W / 2, H / 2); }
+    // legend
+    const opt = valueOptions().find(o => o[0] === ($('mapVal').value || 'li'));
+    $('mapHead').textContent = 'Map of ' + (opt ? opt[1] : 'Li I 670.78');
+    $('mapLegend').innerHTML = vals.length ? `<span>${sig(lo, 3)}${esc(unitOf())}</span><span class="bar-grad" style="background:linear-gradient(90deg,${R.join(',')})"></span><span>${sig(hi, 3)}${esc(unitOf())}</span>` +
+      layers.filter(L => L.kind === 'xrf' && L.show && L.M).slice(0, 1).map(L => `<span style="margin-left:18px">${esc(L.name)}</span><span class="bar-grad" style="background:linear-gradient(90deg,${XRF_RAMP.join(',')})"></span><span>${sig(L.lo, 3)}–${sig(L.hi, 3)} ${esc(L.unit)}</span>`).join('') : '';
+    drawCmp();
+  }
+  // pan, zoom, hover
+  let drag = null;
+  canvas.addEventListener('pointerdown', (e) => { drag = { x: e.clientX, y: e.clientY, cx: view.cx, cy: view.cy }; canvas.setPointerCapture(e.pointerId); canvas.style.cursor = 'grabbing'; });
+  canvas.addEventListener('pointerup', () => { drag = null; canvas.style.cursor = ''; });
+  canvas.addEventListener('pointermove', (e) => {
+    const rc = canvas.getBoundingClientRect(), x = e.clientX - rc.left, y = e.clientY - rc.top;
+    if (drag) { view.cx = drag.cx - (e.clientX - drag.x) / view.k; view.cy = drag.cy - ys() * (e.clientY - drag.y) / view.k; tip.style.display = 'none'; draw(); return; }
+    const [X, Y] = toStage(x, y, rc.width, rc.height); $('mapCoord').textContent = `cursor at X ${X.toFixed(3)}, Y ${Y.toFixed(3)} mm`;
+    let best = null, bd = Infinity; for (const h of hits) { const d = Math.hypot(h.x - x, h.y - y); if (d < h.r + 6 && d < bd) { best = h; bd = d; } }
+    if (!best) { tip.style.display = 'none'; return; }
+    const p = best.p, xr = xrfAt(p);
+    tip.innerHTML = `<div><span class="chip" style="background:var(--s${p.s.slot})"></span><strong>${esc(p.s.name)}</strong></div><div>${esc(p.name)}</div><div>${isFinite(p.v) ? sig(p.v, 3) + esc(unitOf()) : '–'}${p.det ? '' : ' (not detected)'}</div><div>X ${p.X.toFixed(3)}, Y ${p.Y.toFixed(3)} mm</div>${isFinite(xr) ? `<div>micro-XRF ${sig(xr, 3)}</div>` : ''}`;
+    tip.style.display = 'block'; const tw = tip.offsetWidth;
+    tip.style.left = (canvas.offsetLeft + (x + 16 + tw > rc.width ? x - tw - 12 : x + 16)) + 'px'; tip.style.top = (canvas.offsetTop + Math.max(0, y - 20)) + 'px';
+  });
+  canvas.addEventListener('pointerleave', () => { tip.style.display = 'none'; });
+  canvas.addEventListener('wheel', (e) => {
+    e.preventDefault(); const rc = canvas.getBoundingClientRect(), x = e.clientX - rc.left, y = e.clientY - rc.top, [X, Y] = toStage(x, y, rc.width, rc.height);
+    view.k *= Math.exp(-e.deltaY * 0.0015); view.k = Math.max(1e-2, Math.min(1e6, view.k));
+    view.cx = X - (x - rc.width / 2) / view.k; view.cy = Y - ys() * (y - rc.height / 2) / view.k; draw();
+  }, { passive: false });
+  canvas.addEventListener('dblclick', () => { fit(); draw(); });
+  $('mapFit').onclick = () => { fit(); draw(); };
+  $('mapIn').onclick = () => { view.k *= 1.5; draw(); }; $('mapOut').onclick = () => { view.k /= 1.5; draw(); };
+  $('mapOp').oninput = draw; $('mapYup').onchange = draw; $('mapVal').onchange = draw;
+  $('mapSpot').oninput = () => { keep('libs-map-spot', +$('mapSpot').value || 100); draw(); };
+
+  /* ----- micro-XRF comparison ----- */
+  function xrfAt(p, L) {
+    L = L || layers.find(l => String(l.id) === $('cmpLayer').value); if (!L || !L.M || !L.grid) return NaN;
+    const [u, v] = inv(L.M, p.X, p.Y), pxmm = Math.sqrt(Math.abs(L.M.a * L.M.e - L.M.b * L.M.d)), rp = ($('mapSpot').value || 100) / 2000 / pxmm;
+    if (u < 0 || v < 0 || u >= L.w || v >= L.h) return NaN;
+    if (rp < 0.7) return L.grid[Math.floor(v) * L.w + Math.floor(u)];
+    let s = 0, n = 0;
+    for (let j = Math.max(0, Math.floor(v - rp)); j <= Math.min(L.h - 1, Math.ceil(v + rp)); j++)
+      for (let i = Math.max(0, Math.floor(u - rp)); i <= Math.min(L.w - 1, Math.ceil(u + rp)); i++)
+        if ((i + 0.5 - u) ** 2 + (j + 0.5 - v) ** 2 <= rp * rp) { const g = L.grid[j * L.w + i]; if (isFinite(g)) { s += g; n++; } }
+    return n ? s / n : NaN;
+  }
+  let cmpHits = [];
+  function drawCmp() {
+    const c = $('pCmp'), L = layers.find(l => String(l.id) === $('cmpLayer').value); if (!L || $('cmpBox').classList.contains('hide')) return;
+    const dpr = window.devicePixelRatio || 1, W = c.clientWidth, H = c.clientHeight; if (!W) return;
+    c.width = W * dpr; c.height = H * dpr; const ctx = c.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
+    const opt = valueOptions().find(o => o[0] === ($('mapVal').value || 'li')), yl = opt ? opt[1] : 'Li', font = (px) => `400 ${px}px "EB Garamond", Garamond, serif`;
+    $('cmpHead').textContent = `${yl} against ${L.name}`;
+    const pts = spotsCache.filter(p => p.det && isFinite(p.v)).map(p => ({ p, x: xrfAt(p, L), y: p.v })).filter(q => isFinite(q.x));
+    cmpHits = [];
+    ctx.font = font(15); ctx.fillStyle = css('--ink2'); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    if (!L.M) return ctx.fillText('Register this micro-XRF map first.', W / 2, H / 2);
+    if (pts.length < 2) return ctx.fillText('Fewer than two detected LIBS spots fall on this map. Check the registration and spot positions.', W / 2, H / 2);
+    let xa = Math.min(...pts.map(q => q.x)), xb = Math.max(...pts.map(q => q.x)), ya = Math.min(0, ...pts.map(q => q.y)), yb = Math.max(...pts.map(q => q.y));
+    const px_ = (xb - xa) * 0.06 || 1; xa -= px_; xb += px_; yb += (yb - ya) * 0.08 || 1;
+    const P = { l: 72, r: 16, t: 12, b: 46 }, X = (v) => P.l + (v - xa) / (xb - xa) * (W - P.l - P.r), Y = (v) => H - P.b - (v - ya) / (yb - ya) * (H - P.t - P.b);
+    const step = (span, n) => { const r = span / n, p = 10 ** Math.floor(Math.log10(r)), m = r / p; return (m < 1.5 ? 1 : m < 3.5 ? 2 : m < 7.5 ? 5 : 10) * p; };
+    ctx.font = font(13.5); ctx.lineWidth = 1;
+    const sy = step(yb - ya, 5), sx = step(xb - xa, Math.max(3, Math.floor(W / 110)));
+    ctx.textAlign = 'right'; for (let v = Math.ceil(ya / sy) * sy; v <= yb; v += sy) { ctx.strokeStyle = css('--rule2'); ctx.beginPath(); ctx.moveTo(P.l, Y(v)); ctx.lineTo(W - P.r, Y(v)); ctx.stroke(); ctx.fillText(sig(v, 4), P.l - 6, Y(v)); }
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top'; for (let v = Math.ceil(xa / sx) * sx; v <= xb; v += sx) { ctx.strokeStyle = css('--rule2'); ctx.beginPath(); ctx.moveTo(X(v), P.t); ctx.lineTo(X(v), H - P.b); ctx.stroke(); ctx.fillText(sig(v, 4), X(v), H - P.b + 6); }
+    ctx.strokeStyle = css('--rule'); ctx.beginPath(); ctx.moveTo(P.l, P.t); ctx.lineTo(P.l, H - P.b); ctx.lineTo(W - P.r, H - P.b); ctx.stroke();
+    ctx.fillText(`micro-XRF, ${L.unit}, averaged over each spot`, (P.l + W - P.r) / 2, H - 20);
+    ctx.save(); ctx.translate(11, (P.t + H - P.b) / 2); ctx.rotate(-Math.PI / 2); ctx.textBaseline = 'middle'; ctx.fillText(yl, 0, 0); ctx.restore();
+    for (const q of pts) { const x = X(q.x), y = Y(q.y); ctx.fillStyle = css('--s' + q.p.s.slot); ctx.strokeStyle = css('--panel'); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(x, y, 4.5, 0, 6.3); ctx.fill(); ctx.stroke(); cmpHits.push({ x, y, q }); }
+    const n = pts.length, mx = pts.reduce((a, q) => a + q.x, 0) / n, my = pts.reduce((a, q) => a + q.y, 0) / n;
+    const sxy = pts.reduce((a, q) => a + (q.x - mx) * (q.y - my), 0), sxx = pts.reduce((a, q) => a + (q.x - mx) ** 2, 0), syy = pts.reduce((a, q) => a + (q.y - my) ** 2, 0);
+    const rr = sxy / Math.sqrt(sxx * syy);
+    $('cmpNote').textContent = `${n} LIBS locations fall on this map. Correlation coefficient r = ${isFinite(rr) ? rr.toFixed(2) : '–'}. Each point's micro-XRF value is the average of the map pixels inside that spot's footprint (spot diameter above). Micro-XRF cannot see lithium itself, so this shows which elements travel with it.`;
+  }
+  $('cmpLayer').onchange = drawCmp;
+  $('pCmp').addEventListener('pointermove', (e) => {
+    const c = $('pCmp'), t = c.parentElement.querySelector('.tip'), rc = c.getBoundingClientRect(), x = e.clientX - rc.left, y = e.clientY - rc.top;
+    let best = null, bd = 12; for (const h of cmpHits) { const d = Math.hypot(h.x - x, h.y - y); if (d < bd) { best = h; bd = d; } }
+    if (!best) { t.style.display = 'none'; return; }
+    const p = best.q.p; t.innerHTML = `<div><span class="chip" style="background:var(--s${p.s.slot})"></span><strong>${esc(p.s.name)}</strong></div><div>${esc(p.name)}</div><div>LIBS ${sig(best.q.y, 3)}${esc(unitOf())}</div><div>micro-XRF ${sig(best.q.x, 3)}</div>`;
+    t.style.display = 'block'; const tw = t.offsetWidth; t.style.left = (c.offsetLeft + (x + 14 + tw > rc.width ? x - tw - 12 : x + 14)) + 'px'; t.style.top = (c.offsetTop + Math.max(0, y - 20)) + 'px';
+  });
+  $('pCmp').addEventListener('pointerleave', (e) => { e.currentTarget.parentElement.querySelector('.tip').style.display = 'none'; });
+
+  /* ----- export ----- */
+  $('mapCsv').onclick = () => {
+    const sp = spots(), x = layers.filter(L => L.kind === 'xrf' && L.M), r6 = (v) => isFinite(v) ? Number(v.toPrecision(6)) : '';
+    const opt = valueOptions().find(o => o[0] === ($('mapVal').value || 'li'));
+    const rows = [['sample', 'location', 'stage_x_mm', 'stage_y_mm', opt ? opt[1] : 'value', 'detected', ...x.map(L => 'micro_xrf: ' + L.name)],
+      ...sp.map(p => [p.s.name, p.name, r6(p.X), r6(p.Y), r6(p.v), p.det ? 'yes' : 'no', ...x.map(L => r6(xrfAt(p, L)))])];
+    save('libs_spot_map.csv', LIBS.toCsvRows(rows));
+  };
+
+  window.addEventListener('resize', () => draw());
+  new MutationObserver(() => draw()).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => draw());
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => draw());
+  renderLayers();
+  return { refresh() { buildValSel(); renderPos(); draw(); }, refit() { fit(); draw(); } };
 })();
 
 /* ---------- table actions ---------- */
